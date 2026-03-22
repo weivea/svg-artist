@@ -283,6 +283,54 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
+// Professional Tools (4)
+// ---------------------------------------------------------------------------
+
+server.tool(
+  'apply_filter',
+  'Apply a preset filter effect (drop-shadow, blur, glow, emboss, noise-texture, paper, watercolor, metallic, glass) to a layer',
+  {
+    layer_id: z.string().describe('The layer id to apply the filter to'),
+    filter_type: z.enum([
+      'drop-shadow', 'blur', 'glow', 'emboss', 'noise-texture',
+      'paper', 'watercolor', 'metallic', 'glass',
+    ]).describe('Type of filter to apply'),
+    params: z.record(z.string(), z.union([z.number(), z.string()])).optional().describe(
+      'Filter-specific parameters (e.g., { dx: 4, dy: 4, blur: 6 } for drop-shadow)',
+    ),
+  },
+  async (params) => textTool('filter/apply', params),
+);
+
+server.tool(
+  'apply_style_preset',
+  'Apply a unified style preset (flat, isometric, line-art, watercolor, retro, minimalist) across layers',
+  {
+    preset: z.enum(['flat', 'isometric', 'line-art', 'watercolor', 'retro', 'minimalist']).describe('Style preset name'),
+    layers: z.array(z.string()).optional().describe('Specific layer ids to affect (default: all layers)'),
+  },
+  async (params) => textTool('style/apply', params),
+);
+
+server.tool(
+  'get_color_palette',
+  'Generate harmonious color palettes by theme and/or mood. Returns palette options with hex colors and usage roles',
+  {
+    theme: z.string().optional().describe('Theme: ocean, autumn, sunset, forest, urban, spring, night, desert'),
+    mood: z.string().optional().describe('Mood: calm, energetic, mysterious, warm, cold, playful, elegant'),
+    count: z.number().optional().describe('Number of palette options to return (default: 3)'),
+  },
+  async (params) => textTool('palette/generate', params),
+);
+
+server.tool(
+  'critique_composition',
+  'Analyze the current canvas composition. Returns a score (0-100), 7-dimension breakdown, issues, and strengths',
+  {},
+  async () => textTool('composition/critique'),
+);
+
+// ---------------------------------------------------------------------------
 // Start server
 // ---------------------------------------------------------------------------
 

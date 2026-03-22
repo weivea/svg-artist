@@ -1,4 +1,6 @@
 import { parseHTML } from 'linkedom';
+import { generateFilter, FilterType, FilterParams } from './filter-templates.js';
+import { getPresetRules, StylePreset } from './style-presets.js';
 
 export interface BBox {
   x: number;
@@ -390,6 +392,106 @@ export class SvgEngine {
     }
 
     return this._elementBBox(el);
+  }
+
+  /** Get bounding boxes for all layers */
+  getAllElementBboxes(): Map<string, BBox> {
+    const result = new Map<string, BBox>();
+    const layers = this.listLayers();
+    for (const layer of layers) {
+      const bbox = this.getElementBBox(layer.id);
+      if (bbox && (bbox.width > 0 || bbox.height > 0)) {
+        result.set(layer.id, bbox);
+      }
+    }
+    return result;
+  }
+
+  /** Apply a preset filter to a layer. Adds filter def and sets filter attribute. */
+  applyFilter(layerId: string, filterType: FilterType, params?: FilterParams): { ok: boolean; filterId?: string; error?: string } {
+    const g = this._findLayerElement(layerId);
+    if (!g) return { ok: false, error: 'Layer not found' };
+
+    const { filterId, filterSvg } = generateFilter(filterType, params);
+
+    // Add filter to defs
+    const added = this.manageDefs('add', filterId, filterSvg);
+    if (!added) return { ok: false, error: 'Failed to add filter to defs' };
+
+    // Set filter attribute on the layer
+    g.setAttribute('filter', `url(#${filterId})`);
+
+    return { ok: true, filterId };
+  }
+
+  /** Apply a style preset to specified layers (or all layers if none specified). */
+  applyStyleToLayers(preset: StylePreset, layerIds?: string[]): { ok: boolean; affectedLayers: string[]; filters?: string[]; description?: string; error?: string } {
+    const presetResult = getPresetRules(preset);
+    const { rules, filters, description } = presetResult;
+
+    // If filters are needed, add them to defs
+    if (filters) {
+      for (const filterSvg of filters) {
+        // Extract id from filter SVG
+        const idMatch = filterSvg.match(/id="([^"]+)"/);
+        if (idMatch) {
+          this.manageDefs('add', idMatch[1], filterSvg);
+        }
+      }
+    }
+
+    // Get target layers
+    const layers = this.listLayers();
+    const targetIds = layerIds && layerIds.length > 0
+      ? layerIds
+      : layers.map((l) => l.id);
+
+    const affected: string[] = [];
+
+    for (const id of targetIds) {
+      const g = this._findLayerElement(id);
+      if (!g) continue;
+
+      // Apply style rules to the layer group
+      if (rules.fill !== undefined) {
+        if (rules.fill === null) {
+          g.removeAttribute('fill');
+        } else {
+          g.setAttribute('fill', rules.fill);
+        }
+      }
+      if (rules.stroke !== undefined) {
+        if (rules.stroke === null) {
+          g.removeAttribute('stroke');
+        } else {
+          g.setAttribute('stroke', rules.stroke);
+        }
+      }
+      if (rules.strokeWidth !== undefined) {
+        if (rules.strokeWidth === null) {
+          g.removeAttribute('stroke-width');
+        } else {
+          g.setAttribute('stroke-width', String(rules.strokeWidth));
+        }
+      }
+      if (rules.opacity !== undefined) {
+        g.setAttribute('opacity', String(rules.opacity));
+      }
+      if (rules.filter !== undefined) {
+        if (rules.filter === null) {
+          g.removeAttribute('filter');
+        } else {
+          g.setAttribute('filter', rules.filter);
+        }
+      }
+      if (rules.transform !== undefined && rules.transform !== null) {
+        g.setAttribute('transform', rules.transform);
+      }
+
+      affected.push(id);
+    }
+
+    return { ok: true, affectedLayers: affected, filters: filters, description };
   }
 
   private _elementBBox(el: LElement): BBox | null {

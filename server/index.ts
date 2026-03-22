@@ -8,6 +8,10 @@ import { SessionManager } from './session-manager.js';
 import { DrawingStore } from './drawing-store.js';
 import { SvgEngine } from './svg-engine.js';
 import { renderSvgToPng, renderLayerToPng } from './png-renderer.js';
+import { generatePalettes } from './color-palettes.js';
+import { analyzeComposition } from './composition-analyzer.js';
+import type { FilterType, FilterParams } from './filter-templates.js';
+import type { StylePreset } from './style-presets.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -341,6 +345,52 @@ app.post('/api/svg/:drawId/canvas/viewbox', async (req: Request, res: Response) 
   await drawingStore.updateSvg(req.params.drawId as string, newSvg);
   broadcastSvg(req.params.drawId as string, newSvg);
   res.json({ ok: true });
+});
+
+// --- New Professional Tools API ---
+app.post('/api/svg/:drawId/filter/apply', async (req: Request, res: Response) => {
+  const { layer_id, filter_type, params } = req.body as { layer_id?: string; filter_type?: string; params?: FilterParams };
+  if (!layer_id || !filter_type) { res.status(400).json({ error: 'Missing layer_id or filter_type' }); return; }
+  const drawId = req.params.drawId as string;
+  const drawing = await drawingStore.get(drawId);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const engine = new SvgEngine(drawing.svgContent);
+  const result = engine.applyFilter(layer_id, filter_type as FilterType, params);
+  if (!result.ok) { res.status(400).json({ error: result.error }); return; }
+  const svg = engine.serialize();
+  await drawingStore.updateSvg(drawId, svg);
+  broadcastSvg(drawId, svg);
+  res.json({ ok: true, filter_id: result.filterId });
+});
+
+app.post('/api/svg/:drawId/style/apply', async (req: Request, res: Response) => {
+  const { preset, layers } = req.body as { preset?: string; layers?: string[] };
+  if (!preset) { res.status(400).json({ error: 'Missing preset' }); return; }
+  const drawId = req.params.drawId as string;
+  const drawing = await drawingStore.get(drawId);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const engine = new SvgEngine(drawing.svgContent);
+  const result = engine.applyStyleToLayers(preset as StylePreset, layers);
+  if (!result.ok) { res.status(400).json({ error: result.error }); return; }
+  const svg = engine.serialize();
+  await drawingStore.updateSvg(drawId, svg);
+  broadcastSvg(drawId, svg);
+  res.json({ ok: true, affected_layers: result.affectedLayers, description: result.description });
+});
+
+app.post('/api/svg/:drawId/palette/generate', async (req: Request, res: Response) => {
+  const { theme, mood, count } = req.body as { theme?: string; mood?: string; count?: number };
+  const result = generatePalettes({ theme, mood, count });
+  res.json(result);
+});
+
+app.post('/api/svg/:drawId/composition/critique', async (req: Request, res: Response) => {
+  const drawId = req.params.drawId as string;
+  const drawing = await drawingStore.get(drawId);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const engine = new SvgEngine(drawing.svgContent);
+  const analysis = analyzeComposition(engine);
+  res.json(analysis);
 });
 
 // --- Preview & BBox API ---

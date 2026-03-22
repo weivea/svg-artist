@@ -1,11 +1,15 @@
+import Terminal from './components/Terminal';
+
 export default function App() {
+  const wsBase = `ws://${window.location.host}`;
+
   return (
     <div className="app">
       <div className="svg-pane">
-        <p>SVG Preview (TODO)</p>
+        <p style={{ padding: '1rem' }}>SVG Preview (TODO)</p>
       </div>
       <div className="terminal-pane">
-        <p>Terminal (TODO)</p>
+        <Terminal wsUrl={`${wsBase}/ws/terminal`} />
       </div>
     </div>
   );

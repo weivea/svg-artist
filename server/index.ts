@@ -7,6 +7,7 @@ import { Duplex } from 'stream';
 import { SessionManager } from './session-manager.js';
 import { DrawingStore } from './drawing-store.js';
 import { SvgEngine } from './svg-engine.js';
+import { renderSvgToPng, renderLayerToPng } from './png-renderer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -307,6 +308,79 @@ app.post('/api/svg/:drawId/layers/style', async (req: Request, res: Response) =>
   await drawingStore.updateSvg(req.params.drawId as string, newSvg);
   broadcastSvg(req.params.drawId as string, newSvg);
   res.json({ ok: true });
+});
+
+// --- Defs & ViewBox API ---
+app.post('/api/svg/:drawId/defs/list', async (req: Request, res: Response) => {
+  const drawing = await drawingStore.get(req.params.drawId as string);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const engine = new SvgEngine(drawing.svgContent);
+  res.json({ defs: engine.listDefs() });
+});
+
+app.post('/api/svg/:drawId/defs/manage', async (req: Request, res: Response) => {
+  const { action, id, content } = req.body as any;
+  if (!action || !id) { res.status(400).json({ error: 'Missing action or id' }); return; }
+  const drawing = await drawingStore.get(req.params.drawId as string);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const engine = new SvgEngine(drawing.svgContent);
+  if (!engine.manageDefs(action, id, content)) { res.status(400).json({ error: 'Defs operation failed' }); return; }
+  const newSvg = engine.serialize();
+  await drawingStore.updateSvg(req.params.drawId as string, newSvg);
+  broadcastSvg(req.params.drawId as string, newSvg);
+  res.json({ ok: true, id });
+});
+
+app.post('/api/svg/:drawId/canvas/viewbox', async (req: Request, res: Response) => {
+  const { x, y, width, height } = req.body as any;
+  const drawing = await drawingStore.get(req.params.drawId as string);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const engine = new SvgEngine(drawing.svgContent);
+  engine.setViewBox(x, y, width, height);
+  const newSvg = engine.serialize();
+  await drawingStore.updateSvg(req.params.drawId as string, newSvg);
+  broadcastSvg(req.params.drawId as string, newSvg);
+  res.json({ ok: true });
+});
+
+// --- Preview & BBox API ---
+app.post('/api/svg/:drawId/preview', async (req: Request, res: Response) => {
+  const { width, height } = req.body as any;
+  const drawing = await drawingStore.get(req.params.drawId as string);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  try {
+    const png = renderSvgToPng(drawing.svgContent, width || 800, height);
+    res.json({ image: png.toString('base64') });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `PNG render failed: ${msg}` });
+  }
+});
+
+app.post('/api/svg/:drawId/preview/layer', async (req: Request, res: Response) => {
+  const { layer_id, width, height, show_background } = req.body as any;
+  if (!layer_id) { res.status(400).json({ error: 'Missing layer_id' }); return; }
+  const drawing = await drawingStore.get(req.params.drawId as string);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  try {
+    const png = renderLayerToPng(drawing.svgContent, layer_id, width || 400, height, show_background);
+    if (!png) { res.status(404).json({ error: 'Layer not found' }); return; }
+    res.json({ image: png.toString('base64') });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `PNG render failed: ${msg}` });
+  }
+});
+
+app.post('/api/svg/:drawId/canvas/bbox', async (req: Request, res: Response) => {
+  const { element_id } = req.body as any;
+  if (!element_id) { res.status(400).json({ error: 'Missing element_id' }); return; }
+  const drawing = await drawingStore.get(req.params.drawId as string);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const engine = new SvgEngine(drawing.svgContent);
+  const bbox = engine.getElementBBox(element_id);
+  if (!bbox) { res.status(404).json({ error: 'Element not found' }); return; }
+  res.json(bbox);
 });
 
 // --- SVG callback endpoint (called by MCP Server) ---

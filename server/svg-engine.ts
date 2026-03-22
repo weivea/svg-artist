@@ -1,5 +1,12 @@
 import { parseHTML } from 'linkedom';
 
+export interface BBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface LayerInfo {
   id: string;
   name: string;
@@ -279,5 +286,145 @@ export class SvgEngine {
       g.setAttribute(attrName, String(value));
     }
     return true;
+  }
+
+  /** List all defs (gradients, filters, patterns, clipPaths) */
+  listDefs(): Array<{ id: string; type: string }> {
+    const defs = this.svgElement.querySelector('defs');
+    if (!defs) return [];
+    return Array.from(defs.children).map(child => ({
+      id: child.id || child.getAttribute('id') || '',
+      type: child.tagName.toLowerCase(),
+    }));
+  }
+
+  /** Manage defs: add, update, or delete */
+  manageDefs(action: 'add' | 'update' | 'delete', id: string, content?: string): boolean {
+    let defs = this.svgElement.querySelector('defs');
+
+    if (action === 'delete') {
+      if (!defs) return false;
+      const existing = defs.querySelector(`[id="${id}"]`);
+      if (!existing) return false;
+      existing.remove();
+      return true;
+    }
+
+    if (action === 'add') {
+      if (!content) return false;
+      if (!defs) {
+        // Create <defs> and insert as first child of <svg>
+        defs = this.document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        this.svgElement.insertBefore(defs, this.svgElement.firstChild);
+      }
+      // Parse content into temp doc
+      const { document: tempDoc } = parseHTML(`<!DOCTYPE html><html><body>${content}</body></html>`);
+      const newEl = tempDoc.body.firstElementChild;
+      if (!newEl) return false;
+      defs.appendChild(newEl.cloneNode(true));
+      return true;
+    }
+
+    if (action === 'update') {
+      if (!content || !defs) return false;
+      const existing = defs.querySelector(`[id="${id}"]`);
+      if (!existing) return false;
+      const { document: tempDoc } = parseHTML(`<!DOCTYPE html><html><body>${content}</body></html>`);
+      const newEl = tempDoc.body.firstElementChild;
+      if (!newEl) return false;
+      existing.replaceWith(newEl.cloneNode(true));
+      return true;
+    }
+
+    return false;
+  }
+
+  /** Set SVG viewBox. Partial updates preserve existing values. */
+  setViewBox(x?: number, y?: number, width?: number, height?: number): boolean {
+    const current = (this.svgElement.getAttribute('viewBox') || '0 0 800 600').split(/\s+/).map(Number);
+    const newVB = [
+      x ?? current[0],
+      y ?? current[1],
+      width ?? current[2],
+      height ?? current[3],
+    ];
+    this.svgElement.setAttribute('viewBox', newVB.join(' '));
+    return true;
+  }
+
+  /** Get bounding box of an element by parsing its geometry attributes.
+   * linkedom doesn't support getBBox(), so we estimate from attributes. */
+  getElementBBox(elementId: string): BBox | null {
+    const el = this.svgElement.querySelector(`[id="${elementId}"]`);
+    if (!el) return null;
+
+    const tag = el.tagName.toLowerCase();
+
+    // For <g> elements, compute union of children bboxes
+    if (tag === 'g') {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      const shapeChildren = el.querySelectorAll('circle, rect, ellipse, polygon, polyline, line, path, text');
+      for (const child of Array.from(shapeChildren)) {
+        const bbox = this._elementBBox(child);
+        if (bbox) {
+          minX = Math.min(minX, bbox.x);
+          minY = Math.min(minY, bbox.y);
+          maxX = Math.max(maxX, bbox.x + bbox.width);
+          maxY = Math.max(maxY, bbox.y + bbox.height);
+        }
+      }
+      if (minX === Infinity) return { x: 0, y: 0, width: 0, height: 0 };
+      return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+    }
+
+    return this._elementBBox(el);
+  }
+
+  private _elementBBox(el: Element): BBox | null {
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'rect') {
+      return {
+        x: parseFloat(el.getAttribute('x') || '0'),
+        y: parseFloat(el.getAttribute('y') || '0'),
+        width: parseFloat(el.getAttribute('width') || '0'),
+        height: parseFloat(el.getAttribute('height') || '0'),
+      };
+    }
+    if (tag === 'circle') {
+      const cx = parseFloat(el.getAttribute('cx') || '0');
+      const cy = parseFloat(el.getAttribute('cy') || '0');
+      const r = parseFloat(el.getAttribute('r') || '0');
+      return { x: cx - r, y: cy - r, width: r * 2, height: r * 2 };
+    }
+    if (tag === 'ellipse') {
+      const cx = parseFloat(el.getAttribute('cx') || '0');
+      const cy = parseFloat(el.getAttribute('cy') || '0');
+      const rx = parseFloat(el.getAttribute('rx') || '0');
+      const ry = parseFloat(el.getAttribute('ry') || '0');
+      return { x: cx - rx, y: cy - ry, width: rx * 2, height: ry * 2 };
+    }
+    if (tag === 'polygon' || tag === 'polyline') {
+      const points = (el.getAttribute('points') || '').trim().split(/[\s,]+/).map(Number);
+      if (points.length < 2) return null;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (let i = 0; i < points.length; i += 2) {
+        if (!isNaN(points[i]) && !isNaN(points[i + 1])) {
+          minX = Math.min(minX, points[i]);
+          maxX = Math.max(maxX, points[i]);
+          minY = Math.min(minY, points[i + 1]);
+          maxY = Math.max(maxY, points[i + 1]);
+        }
+      }
+      if (minX === Infinity) return null;
+      return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+    }
+    if (tag === 'line') {
+      const x1 = parseFloat(el.getAttribute('x1') || '0');
+      const y1 = parseFloat(el.getAttribute('y1') || '0');
+      const x2 = parseFloat(el.getAttribute('x2') || '0');
+      const y2 = parseFloat(el.getAttribute('y2') || '0');
+      return { x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) };
+    }
+    return null;
   }
 }

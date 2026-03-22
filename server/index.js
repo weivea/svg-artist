@@ -56,6 +56,11 @@ const terminalWss = new WebSocketServer({ noServer: true });
 
 terminalWss.on('connection', (ws) => {
   console.log('[Terminal WS] Client connected');
+  if (process.env.DISABLE_PTY === '1') {
+    ws.send('\x1b[33m[Test mode: PTY disabled]\x1b[0m\r\n');
+    ws.on('message', () => {});
+    return;
+  }
   ptyManager.attachWebSocket(ws);
 });
 

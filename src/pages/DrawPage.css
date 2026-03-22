@@ -1,0 +1,41 @@
+.draw-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: #16162a;
+  border-bottom: 1px solid #333;
+  min-height: 44px;
+}
+
+.back-button {
+  padding: 4px 12px;
+  background: #374151;
+  color: #eee;
+  border: 1px solid #555;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.back-button:hover {
+  background: #4b5563;
+}
+
+.drawing-title {
+  color: #93c5fd;
+  font-size: 14px;
+  font-family: monospace;
+}
+
+.draw-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}

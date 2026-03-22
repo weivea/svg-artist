@@ -1,0 +1,48 @@
+.home-page {
+  height: 100%;
+  padding: 40px;
+  background: #0f0f23;
+  color: #fff;
+  overflow-y: auto;
+}
+
+.home-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+}
+
+.home-header h1 {
+  font-size: 28px;
+  color: #93c5fd;
+}
+
+.create-button {
+  padding: 10px 20px;
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.create-button:hover {
+  background: #2563eb;
+}
+
+.home-loading,
+.home-empty {
+  color: #666;
+  font-size: 16px;
+  text-align: center;
+  margin-top: 60px;
+}
+
+.drawings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 20px;
+}

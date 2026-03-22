@@ -11,47 +11,58 @@ const DATA_FILE = join(DATA_DIR, 'drawings.json');
 
 const DEFAULT_SVG = '<svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg"><text x="400" y="300" text-anchor="middle" fill="#666" font-size="24">Waiting for artwork...</text></svg>';
 
-export class DrawingStore {
-  constructor() {
-    this._cache = null;
-  }
+export interface Drawing {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  sessionId: string;
+  svgContent: string;
+}
 
-  async _ensureDir() {
+interface DrawingData {
+  drawings: Drawing[];
+}
+
+export class DrawingStore {
+  private _cache: DrawingData | null = null;
+
+  private async _ensureDir(): Promise<void> {
     await mkdir(DATA_DIR, { recursive: true });
   }
 
-  async _load() {
+  private async _load(): Promise<DrawingData> {
     if (this._cache) return this._cache;
     try {
       const raw = await readFile(DATA_FILE, 'utf8');
-      this._cache = JSON.parse(raw);
-    } catch (err) {
-      if (err.code === 'ENOENT') {
+      this._cache = JSON.parse(raw) as DrawingData;
+    } catch (err: unknown) {
+      if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT') {
         this._cache = { drawings: [] };
       } else {
         throw err;
       }
     }
-    return this._cache;
+    return this._cache!;
   }
 
-  async _save() {
+  private async _save(): Promise<void> {
     await this._ensureDir();
     const tmp = DATA_FILE + '.tmp';
     await writeFile(tmp, JSON.stringify(this._cache, null, 2));
     await writeFile(DATA_FILE, JSON.stringify(this._cache, null, 2));
   }
 
-  async list() {
+  async list(): Promise<Drawing[]> {
     const data = await this._load();
     return data.drawings;
   }
 
-  async create() {
+  async create(): Promise<Drawing> {
     const data = await this._load();
     const now = new Date();
     const title = `绘画 ${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const drawing = {
+    const drawing: Drawing = {
       id: nanoid(8),
       title,
       createdAt: now.toISOString(),
@@ -64,12 +75,12 @@ export class DrawingStore {
     return drawing;
   }
 
-  async get(id) {
+  async get(id: string): Promise<Drawing | null> {
     const data = await this._load();
     return data.drawings.find(d => d.id === id) || null;
   }
 
-  async updateSvg(id, svgContent) {
+  async updateSvg(id: string, svgContent: string): Promise<Drawing | null> {
     const data = await this._load();
     const drawing = data.drawings.find(d => d.id === id);
     if (!drawing) return null;
@@ -79,7 +90,7 @@ export class DrawingStore {
     return drawing;
   }
 
-  async delete(id) {
+  async delete(id: string): Promise<boolean> {
     const data = await this._load();
     const index = data.drawings.findIndex(d => d.id === id);
     if (index === -1) return false;

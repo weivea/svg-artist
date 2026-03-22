@@ -1,54 +1,52 @@
 import { test, expect } from '../fixtures';
 import { COMPLEX_SCENE } from '../helpers/svg-samples';
+import { createAndNavigateToDrawing } from '../helpers/navigate-to-drawing';
 
 /**
  * Post SVG via API and reliably wait for it to render in the browser.
- *
- * Handles the race condition where the browser's SVG WebSocket may not
- * be connected yet when the first POST arrives. Retries posting until
- * the content appears in the DOM.
  */
 async function postSvgAndWaitForRender(
   page: import('@playwright/test').Page,
   apiContext: import('@playwright/test').APIRequestContext,
+  drawId: string,
   svg: string,
   selectorToWait: string,
 ) {
   const locator = page.locator(selectorToWait);
 
   for (let attempt = 0; attempt < 10; attempt++) {
-    await apiContext.post('/api/svg', { data: { svg } });
+    await apiContext.post(`/api/svg/${drawId}`, { data: { svg } });
     try {
       await expect(locator).toBeAttached({ timeout: 500 });
-      return; // Success
+      return;
     } catch {
-      // WebSocket not yet connected or message not delivered, retry
       await page.waitForTimeout(200);
     }
   }
 
-  // Final attempt with a longer timeout for a clear error message
-  await apiContext.post('/api/svg', { data: { svg } });
+  await apiContext.post(`/api/svg/${drawId}`, { data: { svg } });
   await expect(locator).toBeAttached({ timeout: 5000 });
 }
 
 test.describe('Region Selection', () => {
+  let drawId: string;
+
   test.beforeEach(async ({ page, apiContext }) => {
-    await page.goto('/');
+    drawId = await createAndNavigateToDrawing(page, apiContext);
 
     // Wait for the page to be interactive
     await expect(page.locator('.xterm')).toBeAttached({ timeout: 10_000 });
 
-    // Post the complex scene SVG and wait for it to render (with retry for WS readiness)
+    // Post the complex scene SVG and wait for it to render
     await postSvgAndWaitForRender(
       page,
       apiContext,
+      drawId,
       COMPLEX_SCENE,
       '.svg-preview-container rect[id="background"]',
     );
   });
 
-  /** Perform a drag gesture over the SVG preview container */
   async function performDrag(page: import('@playwright/test').Page) {
     const container = page.locator('.svg-preview-container');
     const box = await container.boundingBox();
@@ -62,20 +60,17 @@ test.describe('Region Selection', () => {
     await page.mouse.down();
     await page.mouse.move(endX, endY, { steps: 20 });
     await page.mouse.up();
-    // Wait for React state update
     await page.waitForTimeout(300);
   }
 
   test('drag selection creates overlay', async ({ page }) => {
     await performDrag(page);
-
     const selectionInfo = page.locator('.selection-info');
     await expect(selectionInfo).toBeVisible({ timeout: 5000 });
   });
 
   test('selection info shows coordinates', async ({ page }) => {
     await performDrag(page);
-
     const selectionInfo = page.locator('.selection-info');
     await expect(selectionInfo).toBeVisible({ timeout: 5000 });
     await expect(selectionInfo).toContainText('Selected:');
@@ -83,7 +78,6 @@ test.describe('Region Selection', () => {
 
   test('selection info shows element count', async ({ page }) => {
     await performDrag(page);
-
     const selectionInfo = page.locator('.selection-info');
     await expect(selectionInfo).toBeVisible({ timeout: 5000 });
     await expect(selectionInfo).toContainText('element(s)');
@@ -91,14 +85,11 @@ test.describe('Region Selection', () => {
 
   test('clear button removes selection', async ({ page }) => {
     await performDrag(page);
-
     const selectionInfo = page.locator('.selection-info');
     await expect(selectionInfo).toBeVisible({ timeout: 5000 });
 
-    // Click the Clear button inside selection-info
     const clearButton = selectionInfo.locator('button', { hasText: 'Clear' });
     await clearButton.click();
-
     await expect(selectionInfo).not.toBeVisible();
   });
 });

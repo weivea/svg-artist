@@ -17,7 +17,7 @@
     "test:full": "playwright test --project=full-flow"
   },
   "keywords": [],
-  "author": "",
+  "author": "weivea",
   "license": "ISC",
   "type": "module",
   "dependencies": {

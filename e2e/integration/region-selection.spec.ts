@@ -48,39 +48,33 @@ test.describe('Region Selection', () => {
     );
   });
 
-  test('drag selection creates overlay', async ({ page }) => {
+  /** Perform a drag gesture over the SVG preview container */
+  async function performDrag(page: import('@playwright/test').Page) {
     const container = page.locator('.svg-preview-container');
     const box = await container.boundingBox();
 
-    // Start drag at ~25% from left, 50% from top
     const startX = box!.x + box!.width * 0.25;
     const startY = box!.y + box!.height * 0.5;
-    // End drag at ~75% from left, 75% from top
     const endX = box!.x + box!.width * 0.75;
     const endY = box!.y + box!.height * 0.75;
 
     await page.mouse.move(startX, startY);
     await page.mouse.down();
-    await page.mouse.move(endX, endY, { steps: 10 });
+    await page.mouse.move(endX, endY, { steps: 20 });
     await page.mouse.up();
+    // Wait for React state update
+    await page.waitForTimeout(300);
+  }
+
+  test('drag selection creates overlay', async ({ page }) => {
+    await performDrag(page);
 
     const selectionInfo = page.locator('.selection-info');
     await expect(selectionInfo).toBeVisible({ timeout: 5000 });
   });
 
   test('selection info shows coordinates', async ({ page }) => {
-    const container = page.locator('.svg-preview-container');
-    const box = await container.boundingBox();
-
-    const startX = box!.x + box!.width * 0.25;
-    const startY = box!.y + box!.height * 0.5;
-    const endX = box!.x + box!.width * 0.75;
-    const endY = box!.y + box!.height * 0.75;
-
-    await page.mouse.move(startX, startY);
-    await page.mouse.down();
-    await page.mouse.move(endX, endY, { steps: 10 });
-    await page.mouse.up();
+    await performDrag(page);
 
     const selectionInfo = page.locator('.selection-info');
     await expect(selectionInfo).toBeVisible({ timeout: 5000 });
@@ -88,18 +82,7 @@ test.describe('Region Selection', () => {
   });
 
   test('selection info shows element count', async ({ page }) => {
-    const container = page.locator('.svg-preview-container');
-    const box = await container.boundingBox();
-
-    const startX = box!.x + box!.width * 0.25;
-    const startY = box!.y + box!.height * 0.5;
-    const endX = box!.x + box!.width * 0.75;
-    const endY = box!.y + box!.height * 0.75;
-
-    await page.mouse.move(startX, startY);
-    await page.mouse.down();
-    await page.mouse.move(endX, endY, { steps: 10 });
-    await page.mouse.up();
+    await performDrag(page);
 
     const selectionInfo = page.locator('.selection-info');
     await expect(selectionInfo).toBeVisible({ timeout: 5000 });
@@ -107,18 +90,7 @@ test.describe('Region Selection', () => {
   });
 
   test('clear button removes selection', async ({ page }) => {
-    const container = page.locator('.svg-preview-container');
-    const box = await container.boundingBox();
-
-    const startX = box!.x + box!.width * 0.25;
-    const startY = box!.y + box!.height * 0.5;
-    const endX = box!.x + box!.width * 0.75;
-    const endY = box!.y + box!.height * 0.75;
-
-    await page.mouse.move(startX, startY);
-    await page.mouse.down();
-    await page.mouse.move(endX, endY, { steps: 10 });
-    await page.mouse.up();
+    await performDrag(page);
 
     const selectionInfo = page.locator('.selection-info');
     await expect(selectionInfo).toBeVisible({ timeout: 5000 });

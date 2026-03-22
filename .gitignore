@@ -9,3 +9,4 @@ dist/
 *.log
 settings.local.json
 data/
+.worktrees/

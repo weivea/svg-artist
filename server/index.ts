@@ -268,6 +268,47 @@ app.post('/api/svg/:drawId/layers/duplicate', async (req: Request, res: Response
   res.json({ ok: true, new_layer_id: newLayerId });
 });
 
+app.post('/api/svg/:drawId/layers/transform', async (req: Request, res: Response) => {
+  const { layer_id, translate, scale, rotate } = req.body as any;
+  if (!layer_id) { res.status(400).json({ error: 'Missing layer_id' }); return; }
+  const drawing = await drawingStore.get(req.params.drawId as string);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const engine = new SvgEngine(drawing.svgContent);
+  if (!engine.transformLayer(layer_id, { translate, scale, rotate })) {
+    res.status(404).json({ error: 'Layer not found' }); return;
+  }
+  const newSvg = engine.serialize();
+  await drawingStore.updateSvg(req.params.drawId as string, newSvg);
+  broadcastSvg(req.params.drawId as string, newSvg);
+  res.json({ ok: true });
+});
+
+app.post('/api/svg/:drawId/layers/opacity', async (req: Request, res: Response) => {
+  const { layer_id, opacity } = req.body as any;
+  if (!layer_id || opacity === undefined) { res.status(400).json({ error: 'Missing layer_id or opacity' }); return; }
+  const drawing = await drawingStore.get(req.params.drawId as string);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const engine = new SvgEngine(drawing.svgContent);
+  if (!engine.setLayerOpacity(layer_id, opacity)) { res.status(404).json({ error: 'Layer not found' }); return; }
+  const newSvg = engine.serialize();
+  await drawingStore.updateSvg(req.params.drawId as string, newSvg);
+  broadcastSvg(req.params.drawId as string, newSvg);
+  res.json({ ok: true });
+});
+
+app.post('/api/svg/:drawId/layers/style', async (req: Request, res: Response) => {
+  const { layer_id, ...styles } = req.body as any;
+  if (!layer_id) { res.status(400).json({ error: 'Missing layer_id' }); return; }
+  const drawing = await drawingStore.get(req.params.drawId as string);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const engine = new SvgEngine(drawing.svgContent);
+  if (!engine.setLayerStyle(layer_id, styles)) { res.status(404).json({ error: 'Layer not found' }); return; }
+  const newSvg = engine.serialize();
+  await drawingStore.updateSvg(req.params.drawId as string, newSvg);
+  broadcastSvg(req.params.drawId as string, newSvg);
+  res.json({ ok: true });
+});
+
 // --- SVG callback endpoint (called by MCP Server) ---
 app.post('/api/svg/:drawId', async (req: Request, res: Response) => {
   const { svg } = req.body as { svg?: string };

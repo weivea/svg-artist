@@ -236,4 +236,48 @@ export class SvgEngine {
 
     return newId;
   }
+
+  /** Apply transform to a layer */
+  transformLayer(layerId: string, opts: {
+    translate?: { x: number; y: number };
+    scale?: { x: number; y: number };
+    rotate?: { angle: number; cx?: number; cy?: number };
+  }): boolean {
+    const g = this._findLayerElement(layerId);
+    if (!g) return false;
+
+    const parts: string[] = [];
+    if (opts.translate) parts.push(`translate(${opts.translate.x}, ${opts.translate.y})`);
+    if (opts.scale) parts.push(`scale(${opts.scale.x}, ${opts.scale.y})`);
+    if (opts.rotate) {
+      const { angle, cx, cy } = opts.rotate;
+      parts.push(cx !== undefined && cy !== undefined ? `rotate(${angle}, ${cx}, ${cy})` : `rotate(${angle})`);
+    }
+
+    if (parts.length === 0) return true; // no-op
+
+    const existing = g.getAttribute('transform') || '';
+    const newTransform = (existing + ' ' + parts.join(' ')).trim();
+    g.setAttribute('transform', newTransform);
+    return true;
+  }
+
+  /** Set layer opacity */
+  setLayerOpacity(layerId: string, opacity: number): boolean {
+    const g = this._findLayerElement(layerId);
+    if (!g) return false;
+    g.setAttribute('opacity', String(opacity));
+    return true;
+  }
+
+  /** Set style attributes on a layer <g> element */
+  setLayerStyle(layerId: string, styles: Record<string, string | number>): boolean {
+    const g = this._findLayerElement(layerId);
+    if (!g) return false;
+    for (const [key, value] of Object.entries(styles)) {
+      const attrName = key.replace(/_/g, '-'); // stroke_width → stroke-width
+      g.setAttribute(attrName, String(value));
+    }
+    return true;
+  }
 }

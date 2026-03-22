@@ -255,7 +255,7 @@ app.post('/api/svg/:drawId/layers/move', async (req: Request, res: Response) => 
 });
 
 app.post('/api/svg/:drawId/layers/duplicate', async (req: Request, res: Response) => {
-  const { layer_id, new_name, transform } = req.body as { layer_id?: string; new_name?: string; transform?: string };
+  const { layer_id, new_name, transform } = req.body as { layer_id?: string; new_name?: string; transform?: { translate?: { x: number; y: number } } };
   if (!layer_id) { res.status(400).json({ error: 'Missing layer_id' }); return; }
   const drawId = req.params.drawId as string;
   const drawing = await drawingStore.get(drawId);

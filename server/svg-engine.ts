@@ -52,12 +52,14 @@ export class SvgEngine {
   getCanvasInfo(): CanvasInfo {
     const viewBox = this.svgElement.getAttribute('viewBox') || '';
     const allElements = this.svgElement.querySelectorAll('*');
-    const defs = this.svgElement.querySelectorAll('defs');
+    const defs = this.svgElement.querySelector('defs');
+    const defsCount = defs ? Array.from(defs.children).length : 0;
 
-    // Count top-level layer groups (direct <g> children with id starting with "layer-")
+    // Count all layer groups (including nested ones)
+    const allLayerGroups = this.svgElement.querySelectorAll('[id^="layer-"]');
     let layerCount = 0;
-    for (const child of Array.from(this.svgElement.children)) {
-      if (this._isLayerGroup(child)) {
+    for (const child of Array.from(allLayerGroups) as LElement[]) {
+      if (child.tagName.toLowerCase() === 'g') {
         layerCount++;
       }
     }
@@ -65,7 +67,7 @@ export class SvgEngine {
     return {
       viewBox,
       layerCount,
-      defsCount: defs.length,
+      defsCount,
       totalElements: allElements.length,
     };
   }
@@ -210,7 +212,7 @@ export class SvgEngine {
     return true;
   }
 
-  duplicateLayer(layerId: string, newName?: string, transform?: string): string | null {
+  duplicateLayer(layerId: string, newName?: string, transform?: { translate?: { x: number; y: number } }): string | null {
     const element = this._findLayerElement(layerId);
     if (!element) return null;
 
@@ -236,7 +238,11 @@ export class SvgEngine {
 
     // Apply transform if provided
     if (transform) {
-      clone.setAttribute('transform', transform);
+      const parts: string[] = [];
+      if (transform.translate) parts.push(`translate(${transform.translate.x}, ${transform.translate.y})`);
+      if (parts.length > 0) {
+        clone.setAttribute('transform', parts.join(' '));
+      }
     }
 
     // Insert after the original element
@@ -270,9 +276,7 @@ export class SvgEngine {
 
     if (parts.length === 0) return true; // no-op
 
-    const existing = g.getAttribute('transform') || '';
-    const newTransform = (existing + ' ' + parts.join(' ')).trim();
-    g.setAttribute('transform', newTransform);
+    g.setAttribute('transform', parts.join(' '));
     return true;
   }
 
@@ -280,7 +284,8 @@ export class SvgEngine {
   setLayerOpacity(layerId: string, opacity: number): boolean {
     const g = this._findLayerElement(layerId);
     if (!g) return false;
-    g.setAttribute('opacity', String(opacity));
+    const clamped = Math.max(0, Math.min(1, opacity));
+    g.setAttribute('opacity', String(clamped));
     return true;
   }
 

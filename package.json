@@ -11,7 +11,10 @@
     "dev:frontend": "vite",
     "dev:server": "node server/index.js",
     "build": "vite build",
-    "start": "npm run build && node server/index.js"
+    "start": "npm run build && node server/index.js",
+    "test": "playwright test --project=integration",
+    "test:e2e": "playwright test",
+    "test:full": "playwright test --project=full-flow"
   },
   "keywords": [],
   "author": "",
@@ -24,6 +27,7 @@
     "ws": "^8.20.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",

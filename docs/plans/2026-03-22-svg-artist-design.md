@@ -6,28 +6,160 @@ SVG Artist is a web-based drawing tool powered by Claude Code. Users interact wi
 
 ## Architecture
 
-### High-Level Diagram
+### Overall Architecture
 
 ```
-React Frontend (:3000)
-├── SVG Preview (left pane) - live rendering + region selection
-└── xterm.js Terminal (right pane) - full Claude Code PTY proxy
+┌──────────────────────────────────────────────────────────────┐
+│                     React Frontend (:3000)                    │
+│                                                              │
+│  ┌───────────────────────────┬─────────────────────────────┐ │
+│  │   SVG Preview (left)      │   xterm.js Terminal (right)  │ │
+│  │                           │                             │ │
+│  │  ┌─────────────────────┐  │   Human: Draw a cat          │ │
+│  │  │    🐱                │  │   ● Calling draw_svg...      │ │
+│  │  │  ┌─ ─ ─ ─ ┐        │  │   Done! Here's your cat~     │ │
+│  │  │  │ select  │        │  │                             │ │
+│  │  │  └─ ─ ─ ─ ┘        │  │   Human: Make eyes blue      │ │
+│  │  │                     │  │   (backend auto-injects      │ │
+│  │  └─────────────────────┘  │    selection context)        │ │
+│  │                           │                             │ │
+│  │  Info: selected eye-left  │                             │ │
+│  │  [🖱️ Select] [↩️ Clear]   │                             │ │
+│  └───────────────────────────┴─────────────────────────────┘ │
+│                                                              │
+│  WebSocket A (SVG updates)    WebSocket B (PTY data stream)  │
+└───────┬──────────────────────────────┬───────────────────────┘
+        │                              │
+┌───────▼──────────────────────────────▼───────────────────────┐
+│                   Node.js Backend                            │
+│                                                              │
+│  ┌─────────┐    ┌──────────────────────────────────────────┐ │
+│  │ Express  │    │  PTY Manager                             │ │
+│  │          │    │                                          │ │
+│  │ /api/svg │    │  node-pty spawn claude process           │ │
+│  │ (MCP     │    │  PTY stdout ──→ WebSocket B ──→ xterm.js │ │
+│  │ callback)│    │  xterm.js ──→ WebSocket B ──→ Intercept  │ │
+│  │    │     │    │                                ──→ stdin  │ │
+│  │    ▼     │    │              ┌─────────────────┐         │ │
+│  │ WebSocket│    │              │ stdin Interceptor│         │ │
+│  │ A: push  │    │              │                 │         │ │
+│  │ SVG to   │    │              │ if selection:   │         │ │
+│  │ frontend │    │              │   prepend region│         │ │
+│  │          │    │              │   + elements    │         │ │
+│  │          │    │              │   context       │         │ │
+│  │          │    │              └─────────────────┘         │ │
+│  └─────────┘    └─────────────────┬────────────────────────┘ │
+│                                   │ PTY                      │
+│                                   ▼                          │
+│  ┌───────────────────────────────────────────────────────┐   │
+│  │  claude --mcp-config mcp-config.json                  │   │
+│  │         --system-prompt "You are an SVG artist..."    │   │
+│  │         --allowedTools "mcp__svg-artist__*"           │   │
+│  │                                                       │   │
+│  │  (runs in real PTY, all colors/formatting preserved)  │   │
+│  │                                                       │   │
+│  │  calls draw_svg ──→ MCP Server (child process)        │   │
+│  │                       │                               │   │
+│  │                       POST http://localhost:3000       │   │
+│  │                       /api/svg ────────────────────────┼───┘
+│  └───────────────────────────────────────────────────────┘
+└──────────────────────────────────────────────────────────────┘
+```
 
-         │ WebSocket A (SVG updates)
-         │ WebSocket B (PTY data stream)
-         ▼
-Node.js Backend
-├── Express - static files + MCP callback endpoint
-├── WebSocket Server - dual channel (SVG + PTY)
-├── PTY Manager - node-pty spawn claude process, stdin interception
-└── MCP Server - draw_svg tool, HTTP callback to main process
+### Startup Sequence Diagram
 
-         │ PTY
-         ▼
-Claude Code CLI (long-running session)
-├── --mcp-config mcp-config.json
-├── --system-prompt "You are an SVG artist..."
-└── --allowedTools "mcp__svg-artist__*"
+```
+npm start
+    │
+    ▼
+┌──────────────────────────────────────────────────────────┐
+│  Node.js Main Process                                    │
+│                                                          │
+│  Step 1: Start Express Server                            │
+│          → Serve React static files (from dist/)         │
+│          → Register POST /api/svg endpoint               │
+│          → Listen on http://localhost:3000                │
+│                                                          │
+│  Step 2: Create WebSocket Servers                        │
+│          → ws://:3000/ws/svg      (SVG update channel)   │
+│          → ws://:3000/ws/terminal (PTY data channel)     │
+│                                                          │
+│  Step 3: On first terminal WebSocket connection          │
+│          → node-pty spawns claude CLI in real PTY         │
+│          → PTY stdout piped to WebSocket B               │
+│          → WebSocket B input piped to PTY stdin           │
+│          → stdin interceptor installed                    │
+│                                                          │
+│  Step 4: Claude Code loads MCP Server                    │
+│          → Reads mcp-config.json                         │
+│          → Spawns: node server/mcp-server.js             │
+│          → MCP Server registers draw_svg tool            │
+│                                                          │
+│  ✅ Ready! User interacts via browser                    │
+└──────────────────────────────────────────────────────────┘
+```
+
+### Data Flow Diagrams
+
+**Normal Conversation:**
+```
+User types in xterm.js
+    │ keystroke
+    ▼
+WebSocket B ──→ PTY Manager ──→ node-pty stdin ──→ Claude Code
+                                                       │
+Claude responds                                        │
+    │ stdout                                           │
+    ▼                                                  │
+node-pty stdout ──→ PTY Manager ──→ WebSocket B ──→ xterm.js renders
+```
+
+**SVG Generation:**
+```
+Claude calls draw_svg(svg_content)
+    │ MCP stdio
+    ▼
+MCP Server receives tool call
+    │
+    ├──→ POST http://localhost:3000/api/svg
+    │         │
+    │         ▼
+    │    Express handler
+    │         │
+    │         ▼
+    │    WebSocket A broadcast ──→ React SvgPreview re-renders
+    │
+    └──→ Return success to Claude
+```
+
+**Region-Selected Modification:**
+```
+User drags rectangle on SVG preview
+    │
+    ▼
+Frontend detects intersecting SVG elements (getBBox)
+    │
+    ├──→ SelectionInfo bar: "Selected: eye-left, eye-right"
+    │
+    └──→ WebSocket A: send selection data to backend
+              │
+              ▼
+         PTY Manager stores selection context
+
+User types in xterm: "make it blue"  →  presses Enter
+    │
+    ▼
+PTY Manager stdin interceptor
+    │
+    ├── selection context exists?
+    │   YES: prepend "[Selected region x:120 y:80 w:60 h:40
+    │         Elements: eye-left, eye-right
+    │         Please only modify these elements]"
+    │         + user input "make it blue"
+    │         → write to PTY stdin
+    │         → clear selection
+    │
+    └── xterm.js only shows: "make it blue" (context is transparent)
 ```
 
 ### Components
@@ -52,39 +184,6 @@ Claude Code CLI (long-running session)
 | PTY stdio | stdin/stdout | Main process ↔ Claude CLI | Terminal I/O |
 | MCP stdio | stdin/stdout | Claude CLI ↔ MCP Server | Tool invocation |
 
-### Data Flows
-
-**Normal conversation:**
-1. User types in xterm.js
-2. Keystrokes → WebSocket B → PTY Manager → node-pty stdin
-3. Claude processes and responds
-4. node-pty stdout → PTY Manager → WebSocket B → xterm.js renders
-
-**SVG generation:**
-1. Claude calls `draw_svg(svg_content)` MCP tool
-2. MCP Server receives call, saves SVG
-3. MCP Server POSTs SVG to `http://localhost:3000/api/svg`
-4. Express handler pushes SVG via WebSocket A
-5. React SvgPreview re-renders with new SVG
-
-**Region-selected modification:**
-1. User drags rectangle on SVG preview
-2. Frontend detects intersecting SVG elements via `getBBox()`
-3. SelectionInfo bar shows: "Selected: eye-left, eye-right"
-4. Selection state (coords + elements) sent to backend via WebSocket A
-5. User types in xterm: "change to blue"
-6. PTY Manager intercepts Enter keystroke
-7. Prepends selection context before user input:
-   ```
-   [Selected region x:120 y:80 w:60 h:40
-    Elements in region:
-    - <circle id="eye-left" cx="140" cy="95" r="8"/>
-    - <circle id="eye-right" cx="165" cy="95" r="8"/>
-    Please only modify these elements]
-   change to blue
-   ```
-8. Writes combined message to PTY stdin
-9. xterm.js only shows user's original input "change to blue"
 
 ## Tech Stack
 
@@ -145,14 +244,3 @@ svg-artist/
 }
 ```
 
-## Startup Sequence
-
-1. `npm start` launches Node.js main process
-2. Express server starts, serves React frontend on `:3000`
-3. WebSocket servers created (SVG channel + Terminal channel)
-4. On first frontend WebSocket B connection:
-   - node-pty spawns: `claude --mcp-config mcp-config.json --system-prompt "..." --allowedTools "mcp__svg-artist__*"`
-   - PTY stdout piped to WebSocket B
-   - WebSocket B input piped to PTY stdin (with interception layer)
-5. Claude Code starts, loads MCP Server as subprocess
-6. System ready for user interaction

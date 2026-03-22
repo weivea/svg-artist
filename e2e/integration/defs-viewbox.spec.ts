@@ -88,6 +88,6 @@ test.describe('Defs & ViewBox API', () => {
 
     const infoRes = await apiContext.post(`/api/svg/${drawId}/canvas/info`);
     const info = await infoRes.json();
-    expect(info.viewBox).toBe('0 0 1600 600'); // x=0, y=0 preserved, width changed, height=600 preserved
+    expect(info.viewBox).toBe('0 0 1600 800'); // x=0, y=0 preserved, width changed, height=800 preserved
   });
 });

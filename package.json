@@ -30,8 +30,11 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.0.1",
     "@xterm/addon-attach": "^0.12.0",
     "@xterm/addon-fit": "^0.11.0",
@@ -39,6 +42,7 @@
     "concurrently": "^9.2.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vite": "^8.0.1"
   }

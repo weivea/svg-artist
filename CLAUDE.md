@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SVG Artist is a web-based drawing application with a React frontend and Node.js backend. Users describe artwork in natural language via an embedded Claude Code terminal (xterm.js), and Claude generates SVG content rendered in a live preview pane. The app supports multiple concurrent drawings, each with its own Claude CLI instance and isolated WebSocket channels.
+SVG Artist is a web-based drawing application with a React frontend and Node.js backend. Users describe artwork in natural language via an embedded Claude Code terminal (xterm.js), and Claude generates SVG content through a layer-based drawing system rendered in a live preview pane. The app supports multiple concurrent drawings, each with its own Claude CLI instance and isolated WebSocket channels. Claude operates as a professional SVG artist with 19 MCP tools for layer management, transforms, defs, preview, and canvas operations, plus a drawing skills plugin loaded via `--plugin-dir`.
 
 ## Commands
 
@@ -31,13 +31,16 @@ Full-flow tests require a manually started server (`npm run dev:server`) without
 Browser (:5173 dev / :3000 prod)
   ├── HomePage (/)            ──── GET /api/drawings ──── Express Server (:3000)
   │   (create / history / delete)  POST /api/drawings        ├── DrawingStore (data/drawings.json)
-  │                                DELETE /api/drawings/:id  │
-  └── DrawPage (/draw/:drawId)                               │
+  │                                DELETE /api/drawings/:id  ├── SvgEngine (linkedom DOM manipulation)
+  └── DrawPage (/draw/:drawId)                               ├── PngRenderer (resvg-js → PNG preview)
       ├── SVG Preview (left)  ←── WS /ws/svg/:drawId ───────┤
-      │   (region selection)                                  ├── POST /api/svg/:drawId ← MCP Server
+      │   (region selection)                                  ├── Layer/Canvas/Preview API routes
       └── Terminal (right)    ←→ WS /ws/terminal/:drawId ←→ SessionManager
                                                               └── Map<drawId, PtyManager>
-                                                                  └── spawns Claude CLI with --mcp-config
+                                                                  └── spawns Claude CLI with:
+                                                                      --mcp-config  (19 tools)
+                                                                      --plugin-dir  (5 skills, 1 agent)
+                                                                      --append-system-prompt (layer guide)
 ```
 
 **Frontend routing (React Router, hash mode):**
@@ -47,14 +50,26 @@ Browser (:5173 dev / :3000 prod)
 **Communication channels (per drawId):**
 - `/ws/svg/:drawId` — Server pushes SVG updates to browser; browser sends selection events back
 - `/ws/terminal/:drawId` — Bidirectional PTY I/O between xterm.js and Claude CLI process
-- `POST /api/svg/:drawId` — MCP server's `draw_svg` tool calls this HTTP endpoint to deliver SVG content
+- `POST /api/svg/:drawId` — MCP server's `draw_svg` tool calls this HTTP endpoint to deliver SVG content (legacy)
+
+**Layer API routes (per drawId):**
+- `POST /api/svg/:drawId/canvas/info` — Canvas overview (viewBox, layer count, defs count, total elements)
+- `POST /api/svg/:drawId/canvas/source` — Full SVG source string
+- `POST /api/svg/:drawId/canvas/viewbox` — Set/update viewBox
+- `POST /api/svg/:drawId/canvas/bbox` — Element bounding box estimation
+- `POST /api/svg/:drawId/layers/*` — Layer CRUD: list, get, add, update, delete, move, duplicate, transform, opacity, style
+- `POST /api/svg/:drawId/defs/*` — Defs management: list, manage (add/update/delete gradients, filters, patterns)
+- `POST /api/svg/:drawId/preview` — Full canvas PNG preview (via resvg-js)
+- `POST /api/svg/:drawId/preview/layer` — Single layer PNG preview
 
 **REST API:**
 - `GET /api/drawings` — List all drawings (with svgContent for thumbnails)
 - `POST /api/drawings` — Create new drawing (generates id, sessionId, default SVG)
 - `DELETE /api/drawings/:drawId` — Delete drawing and kill active Claude CLI process
 
-**SVG update flow:** User prompt → Claude CLI → `draw_svg` MCP tool → MCP server POSTs to `/api/svg/:drawId` → Express broadcasts via `/ws/svg/:drawId` (only to clients of that drawId) → React re-renders preview → SVG persisted to `data/drawings.json`
+**SVG update flow:** User prompt → Claude CLI → layer MCP tools (add_layer, update_layer, etc.) → MCP server POSTs to `/api/svg/:drawId/layers/*` → Express backend parses SVG DOM with SvgEngine (linkedom), applies operation, serializes back → broadcasts updated SVG via `/ws/svg/:drawId` → React re-renders preview → SVG persisted to `data/drawings.json`
+
+**Self-review flow:** Claude calls `preview_as_png` → MCP server POSTs to `/api/svg/:drawId/preview` → Express renders SVG to PNG via resvg-js → returns base64 PNG → Claude analyzes the image and decides if adjustments needed
 
 **Region selection flow:** User drag-selects in SVG preview → frontend detects intersecting elements via `getBBox()` → selection sent to backend via `/ws/svg/:drawId` → PtyManager stores it → on next Enter keypress, context is silently prepended to the user's input before writing to PTY stdin → selection auto-clears after use
 
@@ -69,6 +84,9 @@ Browser (:5173 dev / :3000 prod)
 - **Terminal exclusivity** — Only one terminal WebSocket can connect to a given drawId at a time; a second tab sees "Terminal already open in another tab"
 - **stdin interception** — PtyManager buffers keystrokes and intercepts Enter to inject selection context; the context prefix is invisible in xterm.js display (line is erased and rewritten)
 - **MCP callback architecture** — The MCP server runs as a child process of Claude CLI (spawned via `--mcp-config mcp-config.json`). It communicates with Claude over stdin/stdout (JSON-RPC) and with the Express server over HTTP. The callback URL is per-drawId via environment variable
+- **Layer-based drawing** — SVG content is structured using `<g>` layers with `id="layer-*"` and `data-name` attributes. SvgEngine parses SVG with linkedom, applies layer operations, and serializes back. Write operations return minimal JSON (not full SVG) to avoid large payloads
+- **Drawing plugin** — `plugins/svg-drawing/` loaded via `--plugin-dir` provides 5 drawing skills (svg-fundamentals, bezier-and-curves, color-and-gradients, composition, layer-workflow), 1 reference-searcher agent (haiku model), and 1 `/reference` slash command
+- **19 MCP tools** — Information query (3), layer management (7), transform & style (3), defs resources (2), canvas (1), preview (2), legacy draw_svg (1)
 - **`DISABLE_PTY=1`** — Environment variable that makes the terminal WebSocket send a test-mode message instead of spawning Claude CLI; used by Playwright integration tests
 - **Backend is TypeScript (ES modules, run via tsx)** — Both frontend and backend are TypeScript; server uses a separate `tsconfig.server.json` without DOM types
 
@@ -83,16 +101,27 @@ Browser (:5173 dev / :3000 prod)
   - `components/Terminal.tsx` — xterm.js wrapper (accepts wsUrl prop)
   - `components/DrawingCard.tsx` — History card with SVG thumbnail and delete button
 - `server/` — Node.js backend (TypeScript, run via tsx)
-  - `index.ts` — Express + per-drawId WebSocket routing + REST API + graceful shutdown
+  - `index.ts` — Express + per-drawId WebSocket routing + REST API + layer/canvas/preview routes + graceful shutdown
   - `session-manager.ts` — Manages `Map<drawId, PtyManager>` instances
-  - `pty-manager.ts` — Claude CLI PTY lifecycle + stdin interception + session resume support
+  - `pty-manager.ts` — Claude CLI PTY lifecycle + stdin interception + session resume + plugin-dir + append-system-prompt
   - `drawing-store.ts` — JSON-file CRUD for drawings (`data/drawings.json`)
-  - `mcp-server.ts` — MCP `draw_svg` tool implementation (reads callback URL from env)
+  - `mcp-server.ts` — MCP server with 19 tools (layer CRUD, transform, defs, canvas, preview, legacy draw_svg)
+  - `svg-engine.ts` — SVG DOM manipulation layer: parses SVG with linkedom, executes layer/defs/viewBox operations
+  - `png-renderer.ts` — SVG to PNG conversion via resvg-js for full canvas and per-layer preview
 - `data/` — Runtime data directory (gitignored): `drawings.json`
 - `e2e/integration/` — Playwright tests that run with PTY disabled (30s timeout, 1 retry)
 - `e2e/full-flow/` — Playwright tests requiring real Claude CLI (120s timeout, 0 retries)
 - `e2e/helpers/` — Test fixtures, SVG samples, and navigation helpers
 - `mcp-config.json` — MCP server config passed to Claude CLI via `--mcp-config`
+- `plugins/svg-drawing/` — Claude Code drawing plugin loaded via `--plugin-dir`
+  - `.claude-plugin/plugin.json` — Plugin metadata
+  - `skills/svg-fundamentals/SKILL.md` — Basic shapes, paths, transforms, coordinate system
+  - `skills/bezier-and-curves/SKILL.md` — Quadratic/cubic Bézier, arcs, organic shapes
+  - `skills/color-and-gradients/SKILL.md` — Color theory, gradients, patterns, opacity blending
+  - `skills/composition/SKILL.md` — Scene building, layering, perspective, shadows
+  - `skills/layer-workflow/SKILL.md` — Layer naming, work order, self-review workflow
+  - `agents/reference-searcher.md` — Haiku model sub-agent for reference image search
+  - `commands/reference.md` — `/reference` slash command
 - `docs/plans/` — Design and implementation plan documents
 
 ## Testing
@@ -108,5 +137,10 @@ Integration test suites:
 - `page-layout.spec.ts` — DrawPage split-pane layout, terminal rendering, placeholder SVG
 - `websocket-svg.spec.ts` — Per-drawId SVG WebSocket updates, sequential updates, error handling
 - `region-selection.spec.ts` — Drag selection overlay, coordinates, element count, clear
+- `layer-api.spec.ts` — Layer query operations (canvas info, list layers, get layer, get source)
+- `layer-mutations.spec.ts` — Layer write operations (add, update, delete, move, duplicate)
+- `layer-transform-style.spec.ts` — Transform, opacity, and style operations
+- `defs-viewbox.spec.ts` — Defs CRUD (list, add, update, delete) and viewBox operations
+- `preview-api.spec.ts` — PNG preview (full canvas, per-layer) and element bounding box
 
 Test helpers: `e2e/fixtures.ts` (extends Playwright with APIRequestContext), `e2e/helpers/svg-samples.ts`, `e2e/helpers/navigate-to-drawing.ts` (creates drawing via API and navigates to draw page).

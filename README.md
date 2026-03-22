@@ -75,7 +75,7 @@ svg-artist/
 │   ├── session-manager.js      # Manages Map<drawId, PtyManager>
 │   ├── pty-manager.js          # PTY lifecycle + stdin interception
 │   ├── drawing-store.js        # JSON-file CRUD for drawings
-│   └── mcp-server.js           # MCP server (draw_svg tool)
+│   └── mcp-server.js           # MCP server (18 layer/canvas/preview tools)
 │
 ├── data/                       # Runtime data (gitignored)
 │   └── drawings.json           # Persisted drawings + SVG content
@@ -121,11 +121,14 @@ svg-artist/
 │  └──────────────┘  │  ├── drawId_2 → PtyManager_2    │ │
 │         ▲           │  └── ...                         │ │
 │         │           └──────────────────────────────────┘ │
-│         │ POST /api/svg/:drawId    │ spawns per drawId   │
-│  ┌──────┴───────┐                  ▼                     │
-│  │  MCP Server  │◄────── Claude CLI Process (per drawing)│
-│  │  (draw_svg)  │                                        │
-│  └──────────────┘                                        │
+│         │                         │ spawns per drawId   │
+│         │                         ▼                     │
+│         │            Claude CLI Process (per drawing)   │
+│         │              ├── MCP Server (18 tools)        │
+│         │              └── layer/canvas/preview ops     │
+│         │                         │                     │
+│         │  POST /api/svg/:drawId/*│                     │
+│         └─────────────────────────┘                     │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -134,7 +137,7 @@ svg-artist/
 1. User clicks "Create New Drawing" → `POST /api/drawings` → navigate to `/#/draw/:drawId`
 2. DrawPage opens → WebSocket connects to `/ws/terminal/:drawId` → SessionManager spawns Claude CLI
 3. User types a prompt → PtyManager forwards it to Claude CLI
-4. Claude calls the `draw_svg` MCP tool → MCP Server posts SVG to `/api/svg/:drawId`
+4. Claude calls layer MCP tools (add_layer, update_layer, etc.) → MCP Server posts to `/api/svg/:drawId/layers/*`
 5. Server broadcasts the SVG update via `/ws/svg/:drawId` → SVG Preview re-renders
 6. User selects a region → selection context injected into the next prompt automatically
 7. User closes tab → Claude CLI process killed after 2s grace period

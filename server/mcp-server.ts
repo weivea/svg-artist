@@ -17,7 +17,7 @@ async function callApi(
   path: string,
   body: Record<string, unknown> = {},
 ): Promise<{ ok: boolean; status: number; data?: unknown; error?: string }> {
-  const url = path ? `${CALLBACK_URL}/${path}` : CALLBACK_URL;
+  const url = `${CALLBACK_URL}/${path}`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -280,44 +280,6 @@ server.tool(
     show_background: z.boolean().optional().describe('Whether to show background layers'),
   },
   async (params) => imageTool('preview/layer', params),
-);
-
-// ---------------------------------------------------------------------------
-// Legacy (1)
-// ---------------------------------------------------------------------------
-
-server.tool(
-  'draw_svg',
-  'Replace the entire SVG content (use layer tools instead for incremental edits)',
-  {
-    svg_content: z.string().describe('Complete SVG markup to render'),
-  },
-  async ({ svg_content }: { svg_content: string }) => {
-    try {
-      const res = await fetch(CALLBACK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ svg: svg_content }),
-      });
-
-      if (!res.ok) {
-        return {
-          content: [{ type: 'text' as const, text: `Failed to push SVG update: HTTP ${res.status}` }],
-          isError: true,
-        };
-      }
-
-      return {
-        content: [{ type: 'text' as const, text: 'SVG rendered successfully in the preview pane.' }],
-      };
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      return {
-        content: [{ type: 'text' as const, text: `Failed to push SVG update: ${message}` }],
-        isError: true,
-      };
-    }
-  }
 );
 
 // ---------------------------------------------------------------------------

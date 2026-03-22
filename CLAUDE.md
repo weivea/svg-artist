@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SVG Artist is a web-based drawing application with a React frontend and Node.js backend. Users describe artwork in natural language via an embedded Claude Code terminal (xterm.js), and Claude generates SVG content through a layer-based drawing system rendered in a live preview pane. The app supports multiple concurrent drawings, each with its own Claude CLI instance and isolated WebSocket channels. Claude operates as a professional SVG artist with 19 MCP tools for layer management, transforms, defs, preview, and canvas operations, plus a drawing skills plugin loaded via `--plugin-dir`.
+SVG Artist is a web-based drawing application with a React frontend and Node.js backend. Users describe artwork in natural language via an embedded Claude Code terminal (xterm.js), and Claude generates SVG content through a layer-based drawing system rendered in a live preview pane. The app supports multiple concurrent drawings, each with its own Claude CLI instance and isolated WebSocket channels. Claude operates as a professional SVG artist with 18 MCP tools for layer management, transforms, defs, preview, and canvas operations, plus a drawing skills plugin loaded via `--plugin-dir`.
 
 ## Commands
 
@@ -38,7 +38,7 @@ Browser (:5173 dev / :3000 prod)
       └── Terminal (right)    ←→ WS /ws/terminal/:drawId ←→ SessionManager
                                                               └── Map<drawId, PtyManager>
                                                                   └── spawns Claude CLI with:
-                                                                      --mcp-config  (19 tools)
+                                                                      --mcp-config  (18 tools)
                                                                       --plugin-dir  (5 skills, 1 agent)
                                                                       --append-system-prompt (layer guide)
 ```
@@ -50,7 +50,6 @@ Browser (:5173 dev / :3000 prod)
 **Communication channels (per drawId):**
 - `/ws/svg/:drawId` — Server pushes SVG updates to browser; browser sends selection events back
 - `/ws/terminal/:drawId` — Bidirectional PTY I/O between xterm.js and Claude CLI process
-- `POST /api/svg/:drawId` — MCP server's `draw_svg` tool calls this HTTP endpoint to deliver SVG content (legacy)
 
 **Layer API routes (per drawId):**
 - `POST /api/svg/:drawId/canvas/info` — Canvas overview (viewBox, layer count, defs count, total elements)
@@ -86,7 +85,7 @@ Browser (:5173 dev / :3000 prod)
 - **MCP callback architecture** — The MCP server runs as a child process of Claude CLI (spawned via `--mcp-config mcp-config.json`). It communicates with Claude over stdin/stdout (JSON-RPC) and with the Express server over HTTP. The callback URL is per-drawId via environment variable
 - **Layer-based drawing** — SVG content is structured using `<g>` layers with `id="layer-*"` and `data-name` attributes. SvgEngine parses SVG with linkedom, applies layer operations, and serializes back. Write operations return minimal JSON (not full SVG) to avoid large payloads
 - **Drawing plugin** — `plugins/svg-drawing/` loaded via `--plugin-dir` provides 5 drawing skills (svg-fundamentals, bezier-and-curves, color-and-gradients, composition, layer-workflow), 1 reference-searcher agent (haiku model), and 1 `/reference` slash command
-- **19 MCP tools** — Information query (3), layer management (7), transform & style (3), defs resources (2), canvas (1), preview (2), legacy draw_svg (1)
+- **18 MCP tools** — Information query (3), layer management (7), transform & style (3), defs resources (2), canvas (1), preview (2)
 - **`DISABLE_PTY=1`** — Environment variable that makes the terminal WebSocket send a test-mode message instead of spawning Claude CLI; used by Playwright integration tests
 - **Backend is TypeScript (ES modules, run via tsx)** — Both frontend and backend are TypeScript; server uses a separate `tsconfig.server.json` without DOM types
 
@@ -105,7 +104,7 @@ Browser (:5173 dev / :3000 prod)
   - `session-manager.ts` — Manages `Map<drawId, PtyManager>` instances
   - `pty-manager.ts` — Claude CLI PTY lifecycle + stdin interception + session resume + plugin-dir + append-system-prompt
   - `drawing-store.ts` — JSON-file CRUD for drawings (`data/drawings.json`)
-  - `mcp-server.ts` — MCP server with 19 tools (layer CRUD, transform, defs, canvas, preview, legacy draw_svg)
+  - `mcp-server.ts` — MCP server with 18 tools (layer CRUD, transform, defs, canvas, preview)
   - `svg-engine.ts` — SVG DOM manipulation layer: parses SVG with linkedom, executes layer/defs/viewBox operations
   - `png-renderer.ts` — SVG to PNG conversion via resvg-js for full canvas and per-layer preview
 - `data/` — Runtime data directory (gitignored): `drawings.json`

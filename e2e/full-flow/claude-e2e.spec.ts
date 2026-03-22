@@ -94,11 +94,11 @@ test.describe('Claude CLI Full Flow @full-flow', () => {
     const terminal = page.locator('.terminal-pane');
     await terminal.click();
 
-    await page.keyboard.type('draw a red circle in the center using the draw_svg tool', { delay: 30 });
+    await page.keyboard.type('draw a red circle in the center using add_layer', { delay: 30 });
     await page.keyboard.press('Enter');
 
     // Wait for SVG to appear in the preview
-    // This may take a while as Claude processes and calls draw_svg
+    // This may take a while as Claude processes and calls add_layer
     const svgPreview = page.locator('.svg-preview-container svg');
     await expect(svgPreview).toBeAttached({ timeout: 60_000 });
 

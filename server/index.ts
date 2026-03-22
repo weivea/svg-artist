@@ -383,7 +383,7 @@ app.post('/api/svg/:drawId/canvas/bbox', async (req: Request, res: Response) => 
   res.json(bbox);
 });
 
-// --- SVG callback endpoint (called by MCP Server) ---
+// --- SVG direct update endpoint (used by tests and internal tools) ---
 app.post('/api/svg/:drawId', async (req: Request, res: Response) => {
   const { svg } = req.body as { svg?: string };
   const drawId = req.params.drawId as string;

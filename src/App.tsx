@@ -44,6 +44,7 @@ export default function App() {
       <div className="svg-pane">
         <SvgPreview
           svgContent={svgContent}
+          externalSelection={selection}
           onSelectionChange={handleSelectionChange}
         />
         {selection && (

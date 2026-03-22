@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface SvgPreviewProps {
   svgContent: string;
+  externalSelection: SelectionData | null;
   onSelectionChange: (selection: SelectionData | null) => void;
 }
 
@@ -10,13 +11,20 @@ export interface SelectionData {
   elements: string[];
 }
 
-export default function SvgPreview({ svgContent, onSelectionChange }: SvgPreviewProps) {
+export default function SvgPreview({ svgContent, externalSelection, onSelectionChange }: SvgPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [selection, setSelection] = useState<{
     x: number; y: number; width: number; height: number;
   } | null>(null);
+
+  // Clear internal selection when parent clears it
+  useEffect(() => {
+    if (externalSelection === null) {
+      setSelection(null);
+    }
+  }, [externalSelection]);
 
   // Convert screen coordinates to SVG viewBox coordinates
   function screenToSvg(clientX: number, clientY: number) {

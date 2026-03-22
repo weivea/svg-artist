@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Terminal from '../components/Terminal';
 import SvgPreview, { SelectionData } from '../components/SvgPreview';
+import { useResizablePanels } from '../hooks/useResizablePanels';
 import './DrawPage.css';
 
 const DEFAULT_SVG = '<svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg"><text x="400" y="300" text-anchor="middle" fill="#666" font-size="24">Waiting for artwork...</text></svg>';
@@ -15,6 +16,7 @@ export default function DrawPage() {
   const [title, setTitle] = useState('');
   const [selection, setSelection] = useState<SelectionData | null>(null);
   const [svgWs, setSvgWs] = useState<WebSocket | null>(null);
+  const { ratio, isDragging, dividerProps, containerRef } = useResizablePanels();
 
   // Load drawing metadata and initial SVG
   useEffect(() => {
@@ -73,8 +75,8 @@ export default function DrawPage() {
         </button>
         <span className="drawing-title">{title}</span>
       </div>
-      <div className="draw-content">
-        <div className="svg-pane">
+      <div className="draw-content" ref={containerRef}>
+        <div className="svg-pane" style={{ flexBasis: `${ratio * 100}%` }}>
           <SvgPreview
             svgContent={svgContent}
             externalSelection={selection}
@@ -92,7 +94,14 @@ export default function DrawPage() {
             </div>
           )}
         </div>
-        <div className="terminal-pane">
+        <div {...dividerProps} />
+        <div
+          className="terminal-pane"
+          style={{
+            flexBasis: `${(1 - ratio) * 100}%`,
+            pointerEvents: isDragging ? 'none' : 'auto',
+          }}
+        >
           <Terminal wsUrl={`${wsBase}/ws/terminal/${drawId}`} />
         </div>
       </div>

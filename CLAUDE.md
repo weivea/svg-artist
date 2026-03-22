@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SVG Artist is a web-based drawing application with a React frontend and Node.js backend. Users describe artwork in natural language via an embedded Claude Code terminal (xterm.js), and Claude generates SVG content through a layer-based drawing system rendered in a live preview pane. The app supports multiple concurrent drawings, each with its own Claude CLI instance and isolated WebSocket channels. Claude operates as a professional SVG artist with 22 MCP tools for layer management, transforms, defs, preview, canvas, filters, styles, palettes, and composition critique, plus a drawing skills plugin loaded via `--plugin-dir` with 10 professional-grade skills, 2 agents, and 2 commands.
+SVG Artist is a web-based drawing application with a React frontend and Node.js backend. Users describe artwork in natural language via an embedded Claude Code terminal (xterm.js), and Claude generates SVG content through a layer-based drawing system rendered in a live preview pane. The app supports multiple concurrent drawings, each with its own Claude CLI instance and isolated WebSocket channels. Claude operates as a professional SVG artist with 22 MCP tools for layer management, transforms, defs, preview, canvas, filters, styles, palettes, and composition critique, plus a drawing skills plugin loaded via `--plugin-dir` with 10 professional-grade skills, 1 agent, and 2 commands.
 
 ## Commands
 
@@ -39,7 +39,7 @@ Browser (:5173 dev / :3000 prod)
                                                               └── Map<drawId, PtyManager>
                                                                   └── spawns Claude CLI with:
                                                                       --mcp-config  (22 tools)
-                                                                      --plugin-dir  (10 skills, 2 agents)
+                                                                      --plugin-dir  (10 skills, 1 agent)
                                                                       --append-system-prompt (layer guide)
 ```
 
@@ -88,7 +88,7 @@ Browser (:5173 dev / :3000 prod)
 - **stdin interception** — PtyManager buffers keystrokes and intercepts Enter to inject selection context; the context prefix is invisible in xterm.js display (line is erased and rewritten)
 - **MCP callback architecture** — The MCP server runs as a child process of Claude CLI (spawned via `--mcp-config mcp-config.json`). It communicates with Claude over stdin/stdout (JSON-RPC) and with the Express server over HTTP. The callback URL is per-drawId via environment variable
 - **Layer-based drawing** — SVG content is structured using `<g>` layers with `id="layer-*"` and `data-name` attributes. SvgEngine parses SVG with linkedom, applies layer operations, and serializes back. Write operations return minimal JSON (not full SVG) to avoid large payloads
-- **Drawing plugin** — `plugins/svg-drawing/` loaded via `--plugin-dir` provides 10 drawing skills (svg-fundamentals, bezier-and-curves, color-and-gradients, composition, layer-workflow, svg-filters-and-effects, illustration-styles, character-illustration, advanced-color-composition, materials-and-textures), 2 agents (design-advisor with sonnet model for integrated research + design, reference-searcher deprecated), and 2 commands (`/reference`, `/design`). The design-advisor agent searches the web, downloads and compresses reference images to `data/references/<drawId>/`, analyzes them visually, and generates design proposals.
+- **Drawing plugin** — `plugins/svg-drawing/` loaded via `--plugin-dir` provides 10 drawing skills (svg-fundamentals, bezier-and-curves, color-and-gradients, composition, layer-workflow, svg-filters-and-effects, illustration-styles, character-illustration, advanced-color-composition, materials-and-textures), 1 agent (design-advisor with sonnet model for integrated research + design), and 2 commands (`/reference`, `/design`). The design-advisor agent searches the web, downloads and compresses reference images to `data/references/<drawId>/`, analyzes them visually, and generates design proposals.
 - **22 MCP tools** — Information query (3), layer management (7), transform & style (3), defs resources (2), canvas (1), preview (2), professional tools (4: apply_filter, apply_style_preset, get_color_palette, critique_composition)
 - **`DISABLE_PTY=1`** — Environment variable that makes the terminal WebSocket send a test-mode message instead of spawning Claude CLI; used by Playwright integration tests
 - **Backend is TypeScript (ES modules, run via tsx)** — Both frontend and backend are TypeScript; server uses a separate `tsconfig.server.json` without DOM types
@@ -132,7 +132,6 @@ Browser (:5173 dev / :3000 prod)
   - `skills/character-illustration/SKILL.md` — Proportion systems, facial expressions, poses, hair/clothing, character consistency, stylization levels
   - `skills/advanced-color-composition/SKILL.md` — Advanced palettes, color psychology, WCAG accessibility, golden ratio, Gestalt principles, visual hierarchy
   - `skills/materials-and-textures/SKILL.md` — 10 material types (metal, glass, wood, water, fabric, stone, skin, fur, brick, ice) with SVG defs code
-  - `agents/reference-searcher.md` — Deprecated, redirects to design-advisor (kept for backward compatibility)
   - `agents/design-advisor.md` — Sonnet model sub-agent for integrated visual research (web search, image download/compress, multimodal analysis) and professional design critique with 2-3 approach proposals
   - `commands/reference.md` — `/reference` slash command for finding reference images
   - `commands/design.md` — `/design` slash command for requesting design advice and composition critique

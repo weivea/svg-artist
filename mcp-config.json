@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "svg-artist": {
-      "command": "node",
-      "args": ["./server/mcp-server.js"]
+      "command": "npx",
+      "args": ["tsx", "./server/mcp-server.ts"]
     }
   }
 }

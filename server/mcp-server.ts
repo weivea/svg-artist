@@ -15,7 +15,7 @@ server.tool(
   {
     svg_content: z.string().describe('Complete SVG markup to render'),
   },
-  async ({ svg_content }) => {
+  async ({ svg_content }: { svg_content: string }) => {
     try {
       const res = await fetch(CALLBACK_URL, {
         method: 'POST',
@@ -25,24 +25,25 @@ server.tool(
 
       if (!res.ok) {
         return {
-          content: [{ type: 'text', text: `Failed to push SVG update: HTTP ${res.status}` }],
+          content: [{ type: 'text' as const, text: `Failed to push SVG update: HTTP ${res.status}` }],
           isError: true,
         };
       }
 
       return {
-        content: [{ type: 'text', text: 'SVG rendered successfully in the preview pane.' }],
+        content: [{ type: 'text' as const, text: 'SVG rendered successfully in the preview pane.' }],
       };
-    } catch (err) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       return {
-        content: [{ type: 'text', text: `Failed to push SVG update: ${err.message}` }],
+        content: [{ type: 'text' as const, text: `Failed to push SVG update: ${message}` }],
         isError: true,
       };
     }
   }
 );
 
-async function main() {
+async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

@@ -28,7 +28,7 @@ html, body, #root { height: 100%; }
 .pane-divider:hover {
   background: #555;
 }
-.svg-preview-container svg {
+.svg-transform-wrapper svg {
   width: 100%;
   height: 100%;
 }

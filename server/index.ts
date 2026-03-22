@@ -6,6 +6,7 @@ import { dirname, join } from 'path';
 import { Duplex } from 'stream';
 import { SessionManager } from './session-manager.js';
 import { DrawingStore } from './drawing-store.js';
+import { SvgEngine } from './svg-engine.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -157,6 +158,38 @@ server.on('upgrade', (request: DrawIdRequest, socket: Duplex, head: Buffer) => {
   }
 
   socket.destroy();
+});
+
+// --- Layer Query API (must be before /api/svg/:drawId to avoid route shadowing) ---
+app.post('/api/svg/:drawId/canvas/info', async (req: Request, res: Response) => {
+  const drawing = await drawingStore.get(req.params.drawId as string);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const engine = new SvgEngine(drawing.svgContent);
+  res.json(engine.getCanvasInfo());
+});
+
+app.post('/api/svg/:drawId/canvas/source', async (req: Request, res: Response) => {
+  const drawing = await drawingStore.get(req.params.drawId as string);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  res.json({ svg: drawing.svgContent });
+});
+
+app.post('/api/svg/:drawId/layers/list', async (req: Request, res: Response) => {
+  const drawing = await drawingStore.get(req.params.drawId as string);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const engine = new SvgEngine(drawing.svgContent);
+  res.json({ layers: engine.listLayers() });
+});
+
+app.post('/api/svg/:drawId/layers/get', async (req: Request, res: Response) => {
+  const { layer_id } = req.body as { layer_id?: string };
+  if (!layer_id) { res.status(400).json({ error: 'Missing layer_id' }); return; }
+  const drawing = await drawingStore.get(req.params.drawId as string);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const engine = new SvgEngine(drawing.svgContent);
+  const content = engine.getLayer(layer_id);
+  if (content === null) { res.status(404).json({ error: 'Layer not found' }); return; }
+  res.json({ content });
 });
 
 // --- SVG callback endpoint (called by MCP Server) ---

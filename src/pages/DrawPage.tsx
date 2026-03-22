@@ -5,7 +5,7 @@ import SvgPreview, { SelectionData } from '../components/SvgPreview';
 import { useResizablePanels } from '../hooks/useResizablePanels';
 import './DrawPage.css';
 
-const DEFAULT_SVG = '<svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg"><text x="400" y="300" text-anchor="middle" fill="#666" font-size="24">Waiting for artwork...</text></svg>';
+const DEFAULT_SVG = '<svg viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg"><text x="400" y="400" text-anchor="middle" fill="#666" font-size="24">Waiting for artwork...</text></svg>';
 
 export default function DrawPage() {
   const { drawId } = useParams<{ drawId: string }>();

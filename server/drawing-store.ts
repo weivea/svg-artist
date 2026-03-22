@@ -9,7 +9,7 @@ const __dirname = dirname(__filename);
 const DATA_DIR = process.env.DATA_DIR || join(__dirname, '..', 'data');
 const DATA_FILE = join(DATA_DIR, 'drawings.json');
 
-const DEFAULT_SVG = '<svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg"><defs></defs><g id="layer-bg" data-name="background"><rect width="800" height="600" fill="#f5f5f5"/></g><g id="layer-content" data-name="content"><text x="400" y="300" text-anchor="middle" fill="#999" font-size="24">Waiting for artwork...</text></g></svg>';
+const DEFAULT_SVG = '<svg viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg"><defs></defs><g id="layer-bg" data-name="background"><rect width="800" height="800" fill="#f5f5f5"/></g><g id="layer-content" data-name="content"><text x="400" y="400" text-anchor="middle" fill="#999" font-size="24">Waiting for artwork...</text></g></svg>';
 
 export interface Drawing {
   id: string;

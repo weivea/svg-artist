@@ -27,7 +27,7 @@ export function renderLayerToPng(
 ): Buffer | null {
   // Extract viewBox
   const viewBoxMatch = svgString.match(/viewBox="([^"]+)"/);
-  const viewBox = viewBoxMatch ? viewBoxMatch[1] : '0 0 800 600';
+  const viewBox = viewBoxMatch ? viewBoxMatch[1] : '0 0 800 800';
 
   // Extract the xmlns
   const xmlnsMatch = svgString.match(/xmlns="([^"]+)"/);

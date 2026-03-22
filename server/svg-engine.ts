@@ -353,7 +353,7 @@ export class SvgEngine {
 
   /** Set SVG viewBox. Partial updates preserve existing values. */
   setViewBox(x?: number, y?: number, width?: number, height?: number): boolean {
-    const current = (this.svgElement.getAttribute('viewBox') || '0 0 800 600').split(/\s+/).map(Number);
+    const current = (this.svgElement.getAttribute('viewBox') || '0 0 800 800').split(/\s+/).map(Number);
     const newVB = [
       x ?? current[0],
       y ?? current[1],

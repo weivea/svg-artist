@@ -20,9 +20,16 @@ export interface CanvasInfo {
   totalElements: number;
 }
 
+// linkedom types - DOM types (Document, Element) are not available in server tsconfig
+// (no lib: "DOM"). We use `any` for linkedom's DOM-like objects.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type LDocument = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type LElement = any;
+
 export class SvgEngine {
-  private document: Document;
-  private svgElement: Element;
+  private document: LDocument;
+  private svgElement: LElement;
 
   constructor(svgString: string) {
     const { document } = parseHTML(svgString);
@@ -38,7 +45,7 @@ export class SvgEngine {
     return this.svgElement.outerHTML;
   }
 
-  private _isLayerGroup(el: Element): boolean {
+  private _isLayerGroup(el: LElement): boolean {
     return el.tagName.toLowerCase() === 'g' && !!el.id && el.id.startsWith('layer-');
   }
 
@@ -75,7 +82,7 @@ export class SvgEngine {
     return layers;
   }
 
-  private _buildLayerTree(element: Element): LayerInfo {
+  private _buildLayerTree(element: LElement): LayerInfo {
     const children: LayerInfo[] = [];
 
     for (const child of Array.from(element.children)) {
@@ -112,11 +119,11 @@ export class SvgEngine {
       .replace(/^-+|-+$/g, '') || 'layer';
   }
 
-  private _getLayerChildren(parent: Element): Element[] {
-    return Array.from(parent.children).filter(child => this._isLayerGroup(child));
+  private _getLayerChildren(parent: LElement): LElement[] {
+    return Array.from(parent.children).filter((child: LElement) => this._isLayerGroup(child));
   }
 
-  private _findLayerElement(layerId: string): Element | null {
+  private _findLayerElement(layerId: string): LElement | null {
     const element = this.svgElement.querySelector(`[id="${layerId}"]`);
     if (!element || element.tagName.toLowerCase() !== 'g') {
       return null;
@@ -126,7 +133,7 @@ export class SvgEngine {
 
   addLayer(name: string, content: string, parentId?: string, position?: number): string | null {
     // Determine parent element
-    let parent: Element;
+    let parent: LElement;
     if (parentId) {
       const parentEl = this._findLayerElement(parentId);
       if (!parentEl) return null;
@@ -179,7 +186,7 @@ export class SvgEngine {
     if (!element) return false;
 
     // Determine target parent
-    let targetParent: Element;
+    let targetParent: LElement;
     if (targetParentId) {
       const parentEl = this._findLayerElement(targetParentId);
       if (!parentEl) return false;
@@ -208,7 +215,7 @@ export class SvgEngine {
     if (!element) return null;
 
     // Clone the element
-    const clone = element.cloneNode(true) as Element;
+    const clone = element.cloneNode(true) as LElement;
 
     // Generate new id
     const name = newName || (element.getAttribute('data-name') || layerId) + ' copy';
@@ -220,7 +227,7 @@ export class SvgEngine {
 
     // Update nested layer ids to avoid duplicates
     const nestedLayers = clone.querySelectorAll('[id^="layer-"]');
-    for (const nested of Array.from(nestedLayers)) {
+    for (const nested of Array.from(nestedLayers) as LElement[]) {
       const oldId = nested.getAttribute('id');
       if (oldId) {
         nested.setAttribute('id', `${oldId}-${Date.now().toString(36)}`);
@@ -292,7 +299,7 @@ export class SvgEngine {
   listDefs(): Array<{ id: string; type: string }> {
     const defs = this.svgElement.querySelector('defs');
     if (!defs) return [];
-    return Array.from(defs.children).map(child => ({
+    return (Array.from(defs.children) as LElement[]).map((child: LElement) => ({
       id: child.id || child.getAttribute('id') || '',
       type: child.tagName.toLowerCase(),
     }));
@@ -364,7 +371,7 @@ export class SvgEngine {
     if (tag === 'g') {
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       const shapeChildren = el.querySelectorAll('circle, rect, ellipse, polygon, polyline, line, path, text');
-      for (const child of Array.from(shapeChildren)) {
+      for (const child of Array.from(shapeChildren) as LElement[]) {
         const bbox = this._elementBBox(child);
         if (bbox) {
           minX = Math.min(minX, bbox.x);
@@ -380,7 +387,7 @@ export class SvgEngine {
     return this._elementBBox(el);
   }
 
-  private _elementBBox(el: Element): BBox | null {
+  private _elementBBox(el: LElement): BBox | null {
     const tag = el.tagName.toLowerCase();
     if (tag === 'rect') {
       return {

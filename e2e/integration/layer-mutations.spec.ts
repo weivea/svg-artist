@@ -41,7 +41,7 @@ test.describe('Layer API — Mutations', () => {
   test('update_layer replaces layer content', async ({ apiContext }) => {
     const drawId = await setupLayeredDrawing(apiContext);
     const res = await apiContext.post(`/api/svg/${drawId}/layers/update`, {
-      data: { layer_id: 'layer-bg', content: '<rect width="800" height="600" fill="red"/>' },
+      data: { layer_id: 'layer-bg', content: '<rect width="800" height="800" fill="red"/>' },
     });
     expect(res.ok()).toBeTruthy();
     expect((await res.json()).ok).toBe(true);

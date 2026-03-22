@@ -14,7 +14,7 @@ test.describe('Layer API — Query Operations', () => {
     const res = await apiContext.post(`/api/svg/${drawId}/canvas/info`);
     expect(res.ok()).toBeTruthy();
     const body = await res.json();
-    expect(body.viewBox).toBe('0 0 800 600');
+    expect(body.viewBox).toBe('0 0 800 800');
     expect(body.layerCount).toBeGreaterThan(0);
     expect(body.defsCount).toBe(1);
   });

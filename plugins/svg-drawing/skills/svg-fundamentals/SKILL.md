@@ -429,3 +429,456 @@ Uses grayscale luminance to control transparency.
 - Clip paths use geometry only (sharp edges)
 - Masks use luminance (allowing gradual fading with gradients)
 - Both are defined in `<defs>` and referenced via `url(#id)`
+
+## SVG Animation
+
+SVG supports two animation systems: SMIL (declarative, embedded in SVG) and CSS @keyframes (style-based). Both can create rich motion without JavaScript.
+
+### SMIL Animation Elements
+
+#### `<animate>` — Attribute Animation
+
+Animates a single attribute over time.
+
+```xml
+<!-- Pulsing circle: radius grows and shrinks -->
+<circle cx="200" cy="200" r="30" fill="#E74C3C">
+  <animate attributeName="r" values="30;50;30" dur="2s" repeatCount="indefinite" />
+</circle>
+
+<!-- Color cycling -->
+<rect x="100" y="100" width="200" height="100" fill="#3498DB">
+  <animate attributeName="fill" values="#3498DB;#E74C3C;#2ECC71;#3498DB"
+           dur="4s" repeatCount="indefinite" />
+</rect>
+
+<!-- Opacity fade in/out -->
+<text x="200" y="150" text-anchor="middle" font-size="24" fill="#333">
+  Fading Text
+  <animate attributeName="opacity" values="0;1;1;0" dur="3s" repeatCount="indefinite" />
+</text>
+```
+
+**Key attributes:**
+- `attributeName` — which attribute to animate
+- `values` — semicolon-separated keyframe values
+- `from` / `to` — simple start/end (alternative to `values`)
+- `dur` — duration (e.g., `2s`, `500ms`)
+- `repeatCount` — `indefinite` for looping, or a number
+- `begin` — delay or event trigger (e.g., `2s`, `click`)
+- `fill` — `freeze` to hold final value, `remove` to reset (default)
+
+#### `<animateTransform>` — Transform Animation
+
+Animates the `transform` attribute (rotate, scale, translate, skewX, skewY).
+
+```xml
+<!-- Continuous rotation (spinning wheel) -->
+<g transform="translate(200, 200)">
+  <rect x="-40" y="-5" width="80" height="10" fill="#E67E22">
+    <animateTransform attributeName="transform" type="rotate"
+                      from="0" to="360" dur="3s" repeatCount="indefinite" />
+  </rect>
+</g>
+
+<!-- Bouncing scale (heartbeat effect) -->
+<circle cx="200" cy="200" r="40" fill="#E74C3C">
+  <animateTransform attributeName="transform" type="scale"
+                    values="1;1.2;1;0.9;1" dur="1s" repeatCount="indefinite"
+                    additive="sum" />
+</circle>
+
+<!-- Swinging pendulum -->
+<g transform="translate(200, 50)">
+  <line x1="0" y1="0" x2="0" y2="120" stroke="#333" stroke-width="2">
+    <animateTransform attributeName="transform" type="rotate"
+                      values="-30;30;-30" dur="2s" repeatCount="indefinite" />
+  </line>
+  <circle cx="0" cy="120" r="15" fill="#8E44AD">
+    <animateTransform attributeName="transform" type="rotate"
+                      values="-30;30;-30" dur="2s" repeatCount="indefinite" />
+  </circle>
+</g>
+```
+
+#### `<animateMotion>` — Path Following
+
+Moves an element along a path.
+
+```xml
+<!-- Circle following a curved path -->
+<path id="motionPath" d="M 50 200 C 100 50, 300 50, 350 200 S 550 350, 600 200"
+      fill="none" stroke="#ccc" stroke-dasharray="5 5" />
+
+<circle r="10" fill="#E74C3C">
+  <animateMotion dur="4s" repeatCount="indefinite" rotate="auto">
+    <mpath href="#motionPath" />
+  </animateMotion>
+</circle>
+
+<!-- Arrow following a circular orbit -->
+<path id="orbit" d="M 200 100 A 100 100 0 1 1 200 300 A 100 100 0 1 1 200 100 Z"
+      fill="none" stroke="#ddd" stroke-width="1" />
+<polygon points="0,-8 16,0 0,8" fill="#3498DB">
+  <animateMotion dur="5s" repeatCount="indefinite" rotate="auto">
+    <mpath href="#orbit" />
+  </animateMotion>
+</polygon>
+```
+
+**Tips for `<animateMotion>`:**
+- `rotate="auto"` — element rotates to match path tangent direction
+- `rotate="auto-reverse"` — same but flipped 180°
+- `rotate="0"` — no rotation, element stays upright
+- Use `keyPoints` and `keyTimes` for non-uniform speed along the path
+
+### Stroke Draw/Undraw Animation
+
+The most popular SVG animation pattern: revealing a path as if being drawn by a pen. Uses `stroke-dasharray` and `stroke-dashoffset`.
+
+```xml
+<!-- Hand-drawing effect: stroke draws itself -->
+<path d="M 50 150 C 100 50, 200 50, 250 150 S 400 250, 450 150"
+      fill="none" stroke="#2C3E50" stroke-width="3"
+      stroke-dasharray="500" stroke-dashoffset="500">
+  <animate attributeName="stroke-dashoffset" from="500" to="0"
+           dur="2s" fill="freeze" />
+</path>
+
+<!-- Text outline draw effect -->
+<text x="200" y="200" text-anchor="middle" font-size="72" font-family="Arial"
+      font-weight="bold" fill="none" stroke="#E74C3C" stroke-width="2"
+      stroke-dasharray="400" stroke-dashoffset="400">
+  HELLO
+  <animate attributeName="stroke-dashoffset" from="400" to="0"
+           dur="3s" fill="freeze" />
+</text>
+
+<!-- Drawing then filling -->
+<path d="M 100 250 L 200 50 L 300 250 Z"
+      stroke="#3498DB" stroke-width="3" stroke-dasharray="600" stroke-dashoffset="600"
+      fill="#3498DB" fill-opacity="0">
+  <!-- Draw the outline -->
+  <animate attributeName="stroke-dashoffset" from="600" to="0"
+           dur="2s" fill="freeze" />
+  <!-- Then fill in -->
+  <animate attributeName="fill-opacity" from="0" to="0.8"
+           dur="0.5s" begin="2s" fill="freeze" />
+</path>
+```
+
+**How it works:**
+1. Set `stroke-dasharray` to the total path length (or larger)
+2. Set `stroke-dashoffset` to the same value (hides the entire stroke)
+3. Animate `stroke-dashoffset` from the path length to `0` (reveals the stroke)
+
+**Tip:** To find exact path length, you can estimate or use a value larger than needed — any value ≥ actual length works.
+
+### CSS @keyframes in SVG
+
+CSS animations work inside SVG via `<style>` elements. Useful for complex timing and easing.
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <style>
+    @keyframes pulse {
+      0%, 100% { opacity: 0.3; r: 20; }
+      50% { opacity: 1; r: 35; }
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-20px); }
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .pulsing { animation: pulse 2s ease-in-out infinite; }
+    .floating { animation: float 3s ease-in-out infinite; }
+    .spinning {
+      transform-origin: 300px 150px;
+      animation: spin 4s linear infinite;
+    }
+  </style>
+
+  <circle cx="100" cy="150" r="20" fill="#E74C3C" class="pulsing" />
+
+  <g class="floating">
+    <rect x="160" y="120" width="60" height="60" rx="10" fill="#3498DB" />
+  </g>
+
+  <rect x="280" y="130" width="40" height="40" fill="#2ECC71" class="spinning" />
+</svg>
+```
+
+### Shape Morphing
+
+Animate between two path shapes by interpolating the `d` attribute (paths must have the same number and type of commands).
+
+```xml
+<!-- Square morphing to circle and back -->
+<path fill="#9B59B6">
+  <animate attributeName="d" dur="3s" repeatCount="indefinite"
+    values="M 150,100 L 250,100 L 250,200 L 150,200 Z;
+            M 150,100 C 150,45 250,45 250,100 C 305,100 305,200 250,200 C 250,255 150,255 150,200 C 95,200 95,100 150,100 Z;
+            M 150,100 L 250,100 L 250,200 L 150,200 Z" />
+</path>
+
+<!-- Star morphing to pentagon -->
+<path fill="#F1C40F" stroke="#E67E22" stroke-width="2">
+  <animate attributeName="d" dur="2s" repeatCount="indefinite"
+    values="M 200,50 L 230,120 L 305,120 L 245,165 L 265,240 L 200,195 L 135,240 L 155,165 L 95,120 L 170,120 Z;
+            M 200,50 L 255,105 L 280,175 L 230,230 L 170,230 L 120,175 L 145,105 L 200,50 L 200,50 L 200,50 Z;
+            M 200,50 L 230,120 L 305,120 L 245,165 L 265,240 L 200,195 L 135,240 L 155,165 L 95,120 L 170,120 Z" />
+</path>
+```
+
+**Important:** For morphing to work correctly, both path shapes must have the **same number of commands** and the **same command types** (e.g., both use `C` commands in the same positions). Restructure paths to match if needed.
+
+## Advanced Text
+
+### `<textPath>` — Text on a Path
+
+Renders text along any SVG path, creating curved, circular, or wavy text.
+
+```xml
+<!-- Text on a curve -->
+<defs>
+  <path id="curve" d="M 50 200 C 100 50, 300 50, 350 200" fill="none" />
+</defs>
+<text font-family="Arial" font-size="18" fill="#2C3E50">
+  <textPath href="#curve">Text flowing along a curve</textPath>
+</text>
+
+<!-- Circular text -->
+<defs>
+  <path id="circle-path" d="M 200 100 A 100 100 0 1 1 200 300 A 100 100 0 1 1 200 100" />
+</defs>
+<text font-family="Georgia" font-size="16" fill="#8E44AD">
+  <textPath href="#circle-path">
+    Text wrapping around a circle — adjust startOffset to position ★
+  </textPath>
+</text>
+
+<!-- Text on a wavy path with startOffset -->
+<defs>
+  <path id="wave" d="M 0 150 Q 100 80, 200 150 T 400 150 T 600 150" fill="none" />
+</defs>
+<text font-family="sans-serif" font-size="20" fill="#E74C3C">
+  <textPath href="#wave" startOffset="10%">Riding the wave ~</textPath>
+</text>
+```
+
+**Key `<textPath>` attributes:**
+- `href` — reference to the path element
+- `startOffset` — where along the path to start (e.g., `50%` for centered)
+- `method` — `align` (default) or `stretch` (stretches glyphs to fit)
+- `spacing` — `auto` (default) or `exact`
+
+### Decorative Text Effects
+
+```xml
+<!-- Outlined text (stroke only, no fill) -->
+<text x="200" y="100" text-anchor="middle" font-family="Impact" font-size="60"
+      fill="none" stroke="#2C3E50" stroke-width="2">OUTLINE</text>
+
+<!-- Double stroke effect -->
+<text x="200" y="180" text-anchor="middle" font-family="Arial Black" font-size="48"
+      fill="#F1C40F" stroke="#E67E22" stroke-width="3" paint-order="stroke">BOLD</text>
+
+<!-- Text with gradient fill -->
+<defs>
+  <linearGradient id="text-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+    <stop offset="0%" stop-color="#E74C3C" />
+    <stop offset="50%" stop-color="#F39C12" />
+    <stop offset="100%" stop-color="#3498DB" />
+  </linearGradient>
+</defs>
+<text x="200" y="260" text-anchor="middle" font-family="Georgia" font-size="42"
+      font-weight="bold" fill="url(#text-gradient)">Rainbow Text</text>
+
+<!-- Shadow text using two layers -->
+<text x="202" y="342" text-anchor="middle" font-family="Arial" font-size="36"
+      fill="rgba(0,0,0,0.3)">Shadow Text</text>
+<text x="200" y="340" text-anchor="middle" font-family="Arial" font-size="36"
+      fill="#ECF0F1">Shadow Text</text>
+```
+
+### Letter Spacing and Kerning
+
+```xml
+<!-- Wide letter spacing for headings -->
+<text x="200" y="60" text-anchor="middle" font-family="Arial" font-size="24"
+      fill="#2C3E50" letter-spacing="8">SPACED OUT</text>
+
+<!-- Tight letter spacing for compact labels -->
+<text x="200" y="120" text-anchor="middle" font-family="Arial" font-size="18"
+      fill="#7F8C8D" letter-spacing="-1">Tightly Packed Text</text>
+
+<!-- Word spacing adjustment -->
+<text x="200" y="180" text-anchor="middle" font-family="serif" font-size="20"
+      fill="#333" word-spacing="12">Wide Word Spacing</text>
+
+<!-- Per-character positioning with dx/dy -->
+<text x="100" y="250" font-family="monospace" font-size="30" fill="#E74C3C">
+  <tspan>D</tspan>
+  <tspan dy="-5">r</tspan>
+  <tspan dy="-5">o</tspan>
+  <tspan dy="0">p</tspan>
+  <tspan dy="5">p</tspan>
+  <tspan dy="5">i</tspan>
+  <tspan dy="0">n</tspan>
+  <tspan dy="-5">g</tspan>
+</text>
+
+<!-- Vertical text -->
+<text x="50" y="100" font-family="serif" font-size="24" fill="#8E44AD"
+      writing-mode="tb" glyph-orientation-vertical="0">
+  Vertical Text
+</text>
+```
+
+**Tips:**
+- `letter-spacing` accepts positive (wider) or negative (tighter) values
+- `word-spacing` only affects spaces between words
+- Use `dx` and `dy` on `<tspan>` for individual character offsets (great for decorative effects)
+- `paint-order="stroke"` draws stroke behind fill, preventing stroke from overlapping the fill
+
+## Responsive SVG
+
+### Fluid Scaling with viewBox
+
+The key to responsive SVG is using `viewBox` without fixed `width` and `height` attributes. This lets the SVG scale fluidly to fill its container.
+
+```xml
+<!-- Responsive: scales to container width, maintains aspect ratio -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="#87CEEB" />
+  <circle cx="400" cy="300" r="100" fill="#E74C3C" />
+</svg>
+
+<!-- Fixed size: always 800×600 pixels regardless of container -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <rect width="800" height="600" fill="#87CEEB" />
+  <circle cx="400" cy="300" r="100" fill="#E74C3C" />
+</svg>
+
+<!-- Percentage-based sizing: fills 100% width, auto height -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="100%">
+  <rect width="800" height="600" fill="#87CEEB" />
+  <circle cx="400" cy="300" r="100" fill="#E74C3C" />
+</svg>
+```
+
+**When to use what:**
+- **No width/height** → SVG fills container, ideal for responsive web
+- **Fixed width/height** → SVG is always that pixel size, good for icons/exports
+- **Percentage width** → SVG fills percentage of container, height derived from viewBox ratio
+
+### `preserveAspectRatio` Detailed Guide
+
+Controls how the viewBox maps to the viewport when aspect ratios differ. Format: `preserveAspectRatio="<alignment> <meet|slice>"`
+
+**Alignment values** (9 combinations of x and y):
+
+| Value | X Position | Y Position |
+|-------|-----------|------------|
+| `xMinYMin` | Left | Top |
+| `xMidYMin` | Center | Top |
+| `xMaxYMin` | Right | Top |
+| `xMinYMid` | Left | Middle |
+| `xMidYMid` | Center | Middle (default) |
+| `xMaxYMid` | Right | Middle |
+| `xMinYMax` | Left | Bottom |
+| `xMidYMax` | Center | Bottom |
+| `xMaxYMax` | Right | Bottom |
+
+**Meet vs Slice:**
+- `meet` (default) — scales to fit entirely within viewport (letterboxing, like `contain` in CSS)
+- `slice` — scales to cover entire viewport (cropping, like `cover` in CSS)
+
+```xml
+<!-- Default: centered, fit within viewport (letterboxed) -->
+<svg viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">
+  <!-- Content scales uniformly, centered, fully visible -->
+</svg>
+
+<!-- Cover viewport, crop overflow (like CSS background-size: cover) -->
+<svg viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice">
+  <!-- Content scales to fill, centered, edges may be cropped -->
+</svg>
+
+<!-- Pin to top-left corner, fit within viewport -->
+<svg viewBox="0 0 800 600" preserveAspectRatio="xMinYMin meet">
+  <!-- Content anchored to top-left, empty space on right/bottom -->
+</svg>
+
+<!-- Pin to bottom-center, cover viewport -->
+<svg viewBox="0 0 800 600" preserveAspectRatio="xMidYMax slice">
+  <!-- Content anchored to bottom-center, top may be cropped -->
+</svg>
+
+<!-- Stretch to fill (no aspect ratio preservation) — USE SPARINGLY -->
+<svg viewBox="0 0 800 600" preserveAspectRatio="none">
+  <!-- Content stretches to fill viewport, aspect ratio NOT maintained -->
+</svg>
+```
+
+**Common use cases:**
+- `xMidYMid meet` — Default, best for most artwork (shows everything, centered)
+- `xMidYMid slice` — Full-bleed backgrounds (fills area, crops edges)
+- `xMinYMin meet` — UI elements anchored to top-left
+- `xMidYMax meet` — Anchored to bottom-center (landscape with ground)
+- `none` — Stretchy UI elements that should fill available space
+
+### Media Queries Inside SVG
+
+SVG supports CSS media queries for responsive behavior based on SVG viewport size.
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <style>
+    /* Default styles (large viewport) */
+    .detail { opacity: 1; }
+    .label { font-size: 14px; }
+    .small-only { display: none; }
+
+    /* When SVG viewport is narrow (< 400px wide) */
+    @media (max-width: 400px) {
+      .detail { opacity: 0; }  /* Hide fine details */
+      .label { font-size: 20px; }  /* Larger text for readability */
+      .small-only { display: block; }  /* Show mobile-only elements */
+    }
+
+    /* When SVG viewport is very small (< 200px) */
+    @media (max-width: 200px) {
+      .label { display: none; }  /* Hide all text at icon size */
+    }
+  </style>
+
+  <!-- Always visible: main shape -->
+  <circle cx="400" cy="300" r="150" fill="#3498DB" />
+
+  <!-- Hidden at small sizes: decorative details -->
+  <g class="detail">
+    <circle cx="350" cy="260" r="20" fill="white" />
+    <circle cx="450" cy="260" r="20" fill="white" />
+    <path d="M 360 350 Q 400 390, 440 350" fill="none" stroke="white" stroke-width="4" />
+  </g>
+
+  <!-- Text that scales with viewport -->
+  <text x="400" y="500" text-anchor="middle" fill="#2C3E50" class="label">
+    Smiley Face
+  </text>
+
+  <!-- Only shown when small -->
+  <text x="400" y="300" text-anchor="middle" font-size="80" class="small-only"
+        fill="white">:)</text>
+</svg>
+```
+
+**Tips:**
+- Media queries in SVG respond to the **SVG element's viewport**, not the browser window
+- Use media queries to progressively simplify artwork at smaller sizes
+- Hide fine details, increase text sizes, and simplify shapes at small viewports
+- `@media (prefers-color-scheme: dark)` also works for dark mode support inside SVG

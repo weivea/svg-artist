@@ -453,3 +453,387 @@ Example workflow:
 - **Balance** — Distribute visual weight; a large shape on one side needs something on the other
 - **Negative space** — Don't fill every area; empty space provides breathing room
 - **Odd numbers** — Groups of 3 or 5 objects look more natural than 2 or 4
+
+## Dynamic Symmetry
+
+Dynamic symmetry uses diagonals and their reciprocals to create a composition grid based on root rectangles. This system, derived from Jay Hambidge's analysis of Greek art and nature, creates compositions that feel naturally balanced and energetic.
+
+### The Diagonal-Based Grid System
+
+Unlike the rule-of-thirds grid (which divides evenly), dynamic symmetry uses diagonal lines from corners and their perpendicular reciprocals to find "eyes" — intersection points where the viewer's attention naturally falls.
+
+```xml
+<!-- Dynamic symmetry overlay for 800×600 canvas -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <!-- Canvas background -->
+  <rect width="800" height="600" fill="#f5f5f0" />
+
+  <!-- Main diagonals (corner to corner) -->
+  <line x1="0" y1="0" x2="800" y2="600" stroke="#E74C3C" stroke-width="1" opacity="0.5" />
+  <line x1="800" y1="0" x2="0" y2="600" stroke="#E74C3C" stroke-width="1" opacity="0.5" />
+
+  <!-- Reciprocal diagonals (perpendicular to main diagonals, from corners) -->
+  <!-- From bottom-left, perpendicular to main diagonal -->
+  <line x1="0" y1="600" x2="533" y2="0" stroke="#3498DB" stroke-width="1" opacity="0.5" />
+  <!-- From top-right, perpendicular to main diagonal -->
+  <line x1="800" y1="0" x2="267" y2="600" stroke="#3498DB" stroke-width="1" opacity="0.5" />
+  <!-- From bottom-right, perpendicular to counter-diagonal -->
+  <line x1="800" y1="600" x2="267" y2="0" stroke="#2ECC71" stroke-width="1" opacity="0.5" />
+  <!-- From top-left, perpendicular to counter-diagonal -->
+  <line x1="0" y1="0" x2="533" y2="600" stroke="#2ECC71" stroke-width="1" opacity="0.5" />
+
+  <!-- "Eyes" — key intersection points (marked with circles) -->
+  <circle cx="320" cy="240" r="8" fill="none" stroke="#F39C12" stroke-width="2" />
+  <circle cx="480" cy="360" r="8" fill="none" stroke="#F39C12" stroke-width="2" />
+  <circle cx="320" cy="360" r="6" fill="none" stroke="#F39C12" stroke-width="1.5" />
+  <circle cx="480" cy="240" r="6" fill="none" stroke="#F39C12" stroke-width="1.5" />
+
+  <!-- Labels -->
+  <text x="330" y="235" font-size="12" fill="#F39C12">Eye 1</text>
+  <text x="490" y="355" font-size="12" fill="#F39C12">Eye 2</text>
+</svg>
+```
+
+### Using Dynamic Symmetry in a Scene
+
+Place the most important elements at intersection "eyes" and align edges along diagonal lines:
+
+```xml
+<!-- Landscape composed using dynamic symmetry -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <defs>
+    <linearGradient id="ds-sky" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a1a2e" />
+      <stop offset="70%" stop-color="#e94560" />
+      <stop offset="100%" stop-color="#ffeaa7" />
+    </linearGradient>
+  </defs>
+
+  <!-- Sky -->
+  <rect width="800" height="600" fill="url(#ds-sky)" />
+
+  <!-- Mountain ridge follows the main diagonal from lower-left to upper-right -->
+  <path d="M 0 500 L 200 350 L 320 240 L 450 300 L 600 200 L 800 350 V 600 H 0 Z"
+        fill="#2C3E50" opacity="0.6" />
+
+  <!-- Focal tree placed at Eye 1 intersection (320, 240) -->
+  <g transform="translate(320, 240)">
+    <rect x="-6" y="0" width="12" height="50" fill="#4E342E" />
+    <circle cx="0" cy="-15" r="30" fill="#1B5E20" />
+    <circle cx="-18" cy="-5" r="22" fill="#2E7D32" />
+    <circle cx="18" cy="-5" r="22" fill="#2E7D32" />
+  </g>
+
+  <!-- Reflective water element at Eye 2 (480, 360) -->
+  <ellipse cx="480" cy="380" rx="120" ry="30" fill="rgba(255,255,200,0.2)" />
+
+  <!-- River path follows reciprocal diagonal direction -->
+  <path d="M 267 600 C 300 500, 400 420, 480 380 C 560 340, 650 300, 800 250"
+        fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="40" stroke-linecap="round" />
+</svg>
+```
+
+### Tips for Dynamic Symmetry
+
+- **Eyes are focal points:** Place your main subject at one of the diagonal intersection points
+- **Diagonals guide movement:** Align edges of terrain, rivers, or roads along the diagonals
+- **Reciprocals create tension:** The perpendicular diagonals create a secondary rhythm
+- **Not a rigid grid:** Use it as a guide, not a constraint — slight deviations feel natural
+- **Works with any aspect ratio:** Just draw corner-to-corner diagonals and their perpendiculars
+
+## Tension and Resolution
+
+Composition can create visual energy (tension) or calm (resolution). Understanding when to use each is key to conveying mood and emotion.
+
+### Dynamic Compositions (Tension)
+
+Dynamic compositions create visual energy, movement, and excitement. They make the viewer's eye move actively across the artwork.
+
+**Techniques for creating tension:**
+
+```xml
+<!-- Diagonal-dominant dynamic composition -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="#1a1a2e" />
+
+  <!-- Strong diagonals create tension -->
+  <path d="M 0 600 L 500 50 L 800 300"
+        fill="none" stroke="#E74C3C" stroke-width="4" opacity="0.8" />
+
+  <!-- Asymmetric element placement (off-center = tension) -->
+  <circle cx="580" cy="120" r="80" fill="#F39C12" opacity="0.8" />
+
+  <!-- Sharp, angular shapes -->
+  <polygon points="100,500 250,200 180,500" fill="#3498DB" opacity="0.7" />
+  <polygon points="350,580 500,300 420,580" fill="#2ECC71" opacity="0.6" />
+
+  <!-- Converging lines (perspective tension) -->
+  <line x1="0" y1="400" x2="700" y2="100" stroke="white" stroke-width="1" opacity="0.2" />
+  <line x1="0" y1="500" x2="750" y2="150" stroke="white" stroke-width="1" opacity="0.2" />
+  <line x1="0" y1="600" x2="800" y2="200" stroke="white" stroke-width="1" opacity="0.2" />
+
+  <!-- Small element near large creates scale tension -->
+  <circle cx="550" cy="420" r="8" fill="white" />
+</svg>
+```
+
+**Key tension techniques:**
+- **Diagonal lines** — diagonals are inherently dynamic (vs. horizontals/verticals)
+- **Asymmetric balance** — off-center placement creates visual pull
+- **Scale contrast** — very large next to very small creates tension
+- **Sharp angles** — triangles and angular shapes feel energetic
+- **Converging lines** — perspective lines create depth tension
+- **Cropping** — elements cut off by the edge imply continuation beyond the frame
+- **Tilted elements** — rotation from vertical/horizontal axes adds instability
+
+### Calm Compositions (Resolution)
+
+Calm compositions create visual stability, peace, and restfulness. The viewer's eye settles comfortably.
+
+```xml
+<!-- Horizontal-dominant calm composition -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <defs>
+    <linearGradient id="calm-sky" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#AED6F1" />
+      <stop offset="100%" stop-color="#EBF5FB" />
+    </linearGradient>
+  </defs>
+
+  <rect width="800" height="600" fill="url(#calm-sky)" />
+
+  <!-- Strong horizontal lines create calm -->
+  <rect y="380" width="800" height="220" fill="#82E0AA" opacity="0.4" />
+  <rect y="420" width="800" height="180" fill="#58D68D" opacity="0.3" />
+  <rect y="460" width="800" height="140" fill="#2ECC71" opacity="0.3" />
+
+  <!-- Symmetrical element placement (centered = stability) -->
+  <circle cx="400" cy="200" r="60" fill="#F9E79F" opacity="0.8" />
+
+  <!-- Gentle curves (soft, organic shapes = calm) -->
+  <path d="M 0 380 Q 200 350, 400 370 T 800 380" fill="none" stroke="#7DCEA0" stroke-width="2" />
+
+  <!-- Evenly spaced elements (rhythm = calm) -->
+  <circle cx="200" cy="450" r="5" fill="#2C3E50" opacity="0.3" />
+  <circle cx="350" cy="450" r="5" fill="#2C3E50" opacity="0.3" />
+  <circle cx="500" cy="450" r="5" fill="#2C3E50" opacity="0.3" />
+  <circle cx="650" cy="450" r="5" fill="#2C3E50" opacity="0.3" />
+
+  <!-- Reflected symmetry reinforces stability -->
+  <ellipse cx="400" cy="500" rx="60" ry="15" fill="#F9E79F" opacity="0.2" />
+</svg>
+```
+
+**Key calm techniques:**
+- **Horizontal lines** — horizontals feel stable and grounded
+- **Symmetry** — centered and mirrored elements create balance
+- **Soft curves** — gentle arcs and circles feel peaceful
+- **Even spacing** — rhythmic, regular placement is restful
+- **Low contrast** — muted colors and subtle value differences
+- **Ample negative space** — breathing room prevents visual stress
+- **Warm, desaturated palette** — soft pastels and earth tones
+
+### Mixing Tension and Resolution
+
+The most compelling compositions combine both — a mostly calm scene with one element of tension creates a focal point:
+
+```xml
+<!-- Calm scene with one tension element -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="#EBF5FB" />
+
+  <!-- Calm: horizontal landscape bands -->
+  <rect y="350" width="800" height="250" fill="#82E0AA" opacity="0.3" />
+  <rect y="400" width="800" height="200" fill="#58D68D" opacity="0.3" />
+
+  <!-- Calm: gentle rolling hills -->
+  <path d="M 0 380 Q 200 340, 400 370 T 800 360 V 600 H 0 Z" fill="#27AE60" opacity="0.2" />
+
+  <!-- TENSION: single diagonal tree breaking the horizontals -->
+  <g transform="translate(500, 300) rotate(-12)">
+    <rect x="-5" y="-80" width="10" height="80" fill="#4E342E" />
+    <circle cx="0" cy="-100" r="35" fill="#1B5E20" />
+  </g>
+
+  <!-- Calm: distant horizontal clouds -->
+  <ellipse cx="200" cy="100" rx="80" ry="15" fill="white" opacity="0.6" />
+  <ellipse cx="600" cy="80" rx="60" ry="12" fill="white" opacity="0.5" />
+</svg>
+```
+
+## Large Scene Management
+
+### Zone Strategies for Complex Scenes
+
+When building scenes with many elements (cityscapes, forests, crowd scenes), divide the canvas into zones and work on each systematically.
+
+#### Three-Zone Depth Strategy
+
+Divide the canvas vertically into three depth zones, each with its own detail level and rendering rules:
+
+```xml
+<!-- Zone map for a complex cityscape -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <!-- ZONE 1: Background (y: 0-250) — simplified, low detail -->
+  <rect y="0" width="800" height="250" fill="none" stroke="#3498DB" stroke-dasharray="8 4" />
+  <text x="400" y="130" text-anchor="middle" font-size="14" fill="#3498DB">
+    Zone 1: Background — low detail, muted colors, small scale
+  </text>
+
+  <!-- ZONE 2: Midground (y: 200-420) — moderate detail -->
+  <rect y="200" width="800" height="220" fill="none" stroke="#F39C12" stroke-dasharray="8 4" />
+  <text x="400" y="315" text-anchor="middle" font-size="14" fill="#F39C12">
+    Zone 2: Midground — moderate detail, medium scale
+  </text>
+
+  <!-- ZONE 3: Foreground (y: 380-600) — full detail -->
+  <rect y="380" width="800" height="220" fill="none" stroke="#E74C3C" stroke-dasharray="8 4" />
+  <text x="400" y="495" text-anchor="middle" font-size="14" fill="#E74C3C">
+    Zone 3: Foreground — full detail, vivid colors, large scale
+  </text>
+</svg>
+```
+
+**Rules per zone:**
+
+| Property | Background (Zone 1) | Midground (Zone 2) | Foreground (Zone 3) |
+|----------|---------------------|---------------------|---------------------|
+| Detail level | Silhouettes, simple shapes | Basic features visible | Full detail, textures |
+| Colors | Desaturated, blue-shifted | Moderate saturation | Full saturation |
+| Opacity | 0.3–0.5 | 0.6–0.8 | 0.9–1.0 |
+| Element size | Small (scale 0.2–0.4) | Medium (scale 0.5–0.7) | Large (scale 0.8–1.0) |
+| Stroke width | 0.5–1px | 1–2px | 2–4px |
+| Path complexity | 3-5 path segments | 5-10 path segments | 10+ path segments |
+
+### Detail Density Gradient
+
+The principle of detail density gradient means: **dense detail in the foreground, progressively sparse toward the background.** This mimics how human vision works — we see nearby objects in detail and distant ones as shapes.
+
+```xml
+<!-- Forest scene demonstrating detail density gradient -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <defs>
+    <linearGradient id="forest-sky" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#87CEEB" />
+      <stop offset="100%" stop-color="#B0E0E6" />
+    </linearGradient>
+  </defs>
+
+  <rect width="800" height="600" fill="url(#forest-sky)" />
+
+  <!-- BACKGROUND TREES: Simple triangles, no detail, muted colors -->
+  <g opacity="0.35">
+    <polygon points="100,280 115,200 130,280" fill="#5D7B6F" />
+    <polygon points="150,270 168,185 186,270" fill="#4A6B5D" />
+    <polygon points="220,275 240,195 260,275" fill="#5D7B6F" />
+    <polygon points="300,280 315,210 330,280" fill="#4A6B5D" />
+    <polygon points="380,272 398,190 416,272" fill="#5D7B6F" />
+    <polygon points="450,278 465,205 480,278" fill="#4A6B5D" />
+    <polygon points="530,275 548,195 566,275" fill="#5D7B6F" />
+    <polygon points="600,280 618,208 636,280" fill="#4A6B5D" />
+    <polygon points="690,276 705,200 720,276" fill="#5D7B6F" />
+  </g>
+
+  <!-- MIDGROUND TREES: Basic tree shape with trunk, moderate detail -->
+  <g opacity="0.65">
+    <g transform="translate(120, 350) scale(0.7)">
+      <rect x="-5" y="-10" width="10" height="40" fill="#5D4037" />
+      <ellipse cx="0" cy="-30" rx="25" ry="30" fill="#2E7D32" />
+    </g>
+    <g transform="translate(300, 360) scale(0.6)">
+      <rect x="-5" y="-10" width="10" height="40" fill="#5D4037" />
+      <ellipse cx="0" cy="-30" rx="25" ry="30" fill="#388E3C" />
+    </g>
+    <g transform="translate(550, 345) scale(0.7)">
+      <rect x="-5" y="-10" width="10" height="40" fill="#5D4037" />
+      <ellipse cx="0" cy="-30" rx="25" ry="30" fill="#2E7D32" />
+    </g>
+    <g transform="translate(700, 355) scale(0.65)">
+      <rect x="-5" y="-10" width="10" height="40" fill="#5D4037" />
+      <ellipse cx="0" cy="-30" rx="25" ry="30" fill="#388E3C" />
+    </g>
+  </g>
+
+  <!-- Ground -->
+  <path d="M 0 420 Q 200 400, 400 415 T 800 410 V 600 H 0 Z" fill="#4CAF50" />
+
+  <!-- FOREGROUND TREES: Full detail — trunk texture, branch structure, leaf clusters -->
+  <g transform="translate(200, 480)">
+    <!-- Detailed trunk with bark lines -->
+    <rect x="-12" y="-120" width="24" height="120" fill="#4E342E" />
+    <line x1="-8" y1="-100" x2="-6" y2="-60" stroke="#3E2723" stroke-width="1" />
+    <line x1="4" y1="-110" x2="6" y2="-50" stroke="#3E2723" stroke-width="1" />
+    <line x1="-2" y1="-90" x2="0" y2="-30" stroke="#3E2723" stroke-width="1" />
+    <!-- Branches -->
+    <line x1="0" y1="-90" x2="-35" y2="-120" stroke="#5D4037" stroke-width="4" stroke-linecap="round" />
+    <line x1="0" y1="-80" x2="30" y2="-105" stroke="#5D4037" stroke-width="3" stroke-linecap="round" />
+    <!-- Detailed leaf clusters -->
+    <circle cx="-40" cy="-135" r="22" fill="#1B5E20" />
+    <circle cx="-20" cy="-145" r="28" fill="#2E7D32" />
+    <circle cx="5" cy="-150" r="32" fill="#388E3C" />
+    <circle cx="30" cy="-140" r="25" fill="#2E7D32" />
+    <circle cx="35" cy="-118" r="20" fill="#1B5E20" />
+    <circle cx="0" cy="-125" r="30" fill="#4CAF50" />
+    <!-- Leaf detail highlights -->
+    <circle cx="-15" cy="-150" r="8" fill="#66BB6A" opacity="0.5" />
+    <circle cx="15" cy="-145" r="10" fill="#66BB6A" opacity="0.4" />
+  </g>
+
+  <g transform="translate(620, 500)">
+    <!-- Another detailed foreground tree -->
+    <rect x="-10" y="-100" width="20" height="100" fill="#4E342E" />
+    <line x1="-5" y1="-80" x2="-4" y2="-30" stroke="#3E2723" stroke-width="1" />
+    <line x1="5" y1="-90" x2="3" y2="-20" stroke="#3E2723" stroke-width="1" />
+    <line x1="0" y1="-75" x2="-30" y2="-100" stroke="#5D4037" stroke-width="3" stroke-linecap="round" />
+    <line x1="0" y1="-65" x2="25" y2="-88" stroke="#5D4037" stroke-width="3" stroke-linecap="round" />
+    <circle cx="-30" cy="-115" r="20" fill="#1B5E20" />
+    <circle cx="-10" cy="-125" r="26" fill="#2E7D32" />
+    <circle cx="15" cy="-120" r="22" fill="#388E3C" />
+    <circle cx="25" cy="-100" r="18" fill="#2E7D32" />
+    <circle cx="0" cy="-110" r="25" fill="#4CAF50" />
+  </g>
+
+  <!-- Foreground details: flowers and grass at bottom -->
+  <g opacity="0.9">
+    <circle cx="100" cy="540" r="4" fill="#E74C3C" />
+    <circle cx="130" cy="535" r="3" fill="#F39C12" />
+    <circle cx="160" cy="545" r="4" fill="#E74C3C" />
+    <circle cx="350" cy="530" r="3" fill="#9B59B6" />
+    <circle cx="380" cy="540" r="4" fill="#F39C12" />
+    <circle cx="500" cy="535" r="3" fill="#E74C3C" />
+    <circle cx="750" cy="545" r="4" fill="#9B59B6" />
+  </g>
+</svg>
+```
+
+### Layer Management for Complex Scenes
+
+For scenes with 15+ layers, organize into logical groups:
+
+```
+Layer structure for a complex scene:
+├── layer-sky                    (background base)
+├── layer-clouds                 (atmospheric)
+├── layer-bg-buildings-left      (background zone)
+├── layer-bg-buildings-right     (background zone)
+├── layer-bg-mountains           (background zone)
+├── layer-mid-buildings          (midground zone)
+├── layer-mid-trees              (midground zone)
+├── layer-street                 (transition zone)
+├── layer-fg-building-main       (foreground zone)
+├── layer-fg-building-detail     (foreground zone)
+├── layer-fg-people              (foreground zone)
+├── layer-fg-vehicle             (foreground zone)
+├── layer-fg-streetlamp          (foreground zone)
+├── layer-shadows                (effects)
+├── layer-lighting               (effects)
+└── layer-atmosphere             (effects overlay)
+```
+
+**Workflow tips for large scenes:**
+1. **Plan all layers before starting** — sketch the layer list with zones
+2. **Build one zone at a time** — complete background before moving to midground
+3. **Preview after each zone** — catch issues before building on top
+4. **Use consistent naming** — prefix with zone: `layer-bg-*`, `layer-mid-*`, `layer-fg-*`
+5. **Keep background simple** — resist the urge to detail things that will be partially hidden
+6. **Detail budget** — allocate most path complexity to 2-3 focal foreground elements

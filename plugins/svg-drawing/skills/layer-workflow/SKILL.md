@@ -452,3 +452,343 @@ Here's a complete workflow for drawing a sunset landscape:
 
 23. Done!
 ```
+
+## Professional Design Critique Framework
+
+Replace vague "does it look right?" reviews with a structured 7-dimension assessment. After each major phase, evaluate the artwork on these seven criteria:
+
+### The 7 Dimensions
+
+#### 1. Purpose — Does it communicate the intended message?
+
+Ask: What should the viewer feel or understand? Is that coming through?
+
+```
+Review checklist:
+- Can you identify the subject within 2 seconds?
+- Does the mood match the intent? (e.g., peaceful scene shouldn't feel chaotic)
+- Is the theme consistent throughout? (e.g., all elements fit the "winter" theme)
+- Would someone unfamiliar with the prompt understand what this depicts?
+```
+
+#### 2. Hierarchy — Is the most important element most prominent?
+
+Ask: Where does the eye go first? Is that the right place?
+
+```
+Review checklist:
+- The focal element should be the LARGEST, most DETAILED, or most COLORFUL
+- Supporting elements should be smaller, simpler, or more muted
+- Check: cover the main subject — does the rest of the scene still make sense as support?
+- No secondary element should compete with the primary subject for attention
+```
+
+#### 3. Unity — Do all elements feel like they belong together?
+
+Ask: Does everything look like it's part of the same artwork?
+
+```
+Review checklist:
+- Consistent color palette (3-5 colors, not random)
+- Consistent style (don't mix realistic and cartoon in one scene)
+- Consistent lighting direction (shadows all point the same way)
+- Consistent level of detail (similar complexity across similar-depth elements)
+- Shared visual language (similar line weights, curve styles, shape vocabulary)
+```
+
+#### 4. Variety — Is there enough visual interest?
+
+Ask: Is there enough difference to prevent monotony?
+
+```
+Review checklist:
+- Variety in sizes (not everything the same scale)
+- Variety in shapes (mix of organic curves and geometric shapes)
+- Variety in spacing (not everything equidistant)
+- Variety in color temperature (some warm, some cool areas)
+- HOWEVER: variety should serve unity — varied within a coherent system
+```
+
+#### 5. Proportion — Are size relationships intentional and effective?
+
+Ask: Do the relative sizes make visual sense?
+
+```
+Review checklist:
+- Foreground objects larger than background objects
+- Related elements are proportional (a person's head isn't bigger than a nearby house)
+- Intentional exaggeration is clearly stylistic, not accidental
+- Negative space is proportional (not too cramped, not too sparse)
+- Elements fit comfortably within the viewBox with appropriate margins
+```
+
+#### 6. Rhythm — Is there visual rhythm through repetition and pattern?
+
+Ask: Is there a visual "beat" that moves the eye through the composition?
+
+```
+Review checklist:
+- Repeated elements create visual rhythm (row of trees, pattern of windows)
+- Rhythm has variation (not perfectly mechanical — slight differences)
+- Leading lines guide the eye through the composition in a deliberate path
+- The eye can "travel" through the scene without getting stuck
+- Spacing between repeated elements varies subtly (closer in background, wider in foreground)
+```
+
+#### 7. Emphasis — Is the focal point clear and compelling?
+
+Ask: Is there one clear star of the show?
+
+```
+Review checklist:
+- One element stands out through contrast (color, size, detail, or isolation)
+- The focal point is positioned at a strong composition point (rule of thirds, dynamic symmetry)
+- Supporting elements point toward or frame the focal point
+- The focal point has the most detail and strongest colors
+- Remove the focal point mentally — does the scene feel incomplete? (It should)
+```
+
+### Using the Framework in Practice
+
+After `preview_as_png`, run through a quick 7-point check:
+
+```
+Quick review template:
+1. Purpose:   ✓ Message clear / ✗ Unclear, need to [fix]
+2. Hierarchy:  ✓ Focal point dominant / ✗ [Element] competes, reduce its [size/color/detail]
+3. Unity:      ✓ Cohesive / ✗ [Element] feels out of place, adjust [property]
+4. Variety:    ✓ Enough interest / ✗ Too uniform, vary [sizes/shapes/colors]
+5. Proportion: ✓ Relationships work / ✗ [Element] too [large/small] relative to [other]
+6. Rhythm:     ✓ Eye flows well / ✗ Eye gets stuck at [location], add [guide]
+7. Emphasis:   ✓ Clear focal point / ✗ Multiple elements compete, strengthen [main] or reduce [others]
+```
+
+Not every dimension needs to be perfect in every piece — but being aware of all seven helps you identify exactly what's off when something "doesn't look right."
+
+## Iteration Framework
+
+Professional artwork is never created in a single pass. Use a systematic 4-stage refinement process, with each stage building on and refining the previous one.
+
+### Stage 1: Rough Sketch (Block-in)
+
+**Goal:** Establish overall composition, proportions, and spatial layout using simple shapes.
+
+```
+What to do:
+- Set viewBox dimensions
+- Place major shapes as simple primitives (rectangles, circles, polygons)
+- No gradients, no detail — just flat colors to mark zones
+- Focus: "Is the big picture right?"
+
+Typical tools: add_layer, manage_defs (basic gradients only)
+Review criteria: Purpose, Proportion, Hierarchy
+```
+
+```
+Example rough sketch workflow:
+1. add_layer("layer-sky", '<rect width="800" height="400" fill="#87CEEB" />')
+2. add_layer("layer-ground", '<rect y="400" width="800" height="200" fill="#4CAF50" />')
+3. add_layer("layer-mountain", '<polygon points="100,400 350,150 600,400" fill="#7B8D8E" />')
+4. add_layer("layer-tree-main", '<circle cx="500" cy="320" r="60" fill="#2E7D32" />')
+5. preview_as_png → Check: Is the composition balanced? Is the tree well-placed?
+```
+
+**Decision gate:** If the composition doesn't work at this stage, restructure now — it's cheap to move simple shapes. Don't proceed until the big picture is right.
+
+### Stage 2: Refined Sketch (Structure)
+
+**Goal:** Replace rough shapes with more accurate forms. Add structural detail but not fine detail.
+
+```
+What to do:
+- Replace primitive shapes with proper outlines (paths, compound shapes)
+- Add secondary elements (minor trees, clouds, rocks)
+- Establish proper layering order
+- Begin defining gradients for major areas
+- Focus: "Are the shapes right?"
+
+Typical tools: update_layer, add_layer, manage_defs, transform_layer
+Review criteria: Unity, Proportion, Rhythm
+```
+
+```
+Example refined sketch workflow:
+1. update_layer("layer-mountain", proper mountain path with curves)
+2. update_layer("layer-tree-main", detailed tree with trunk + canopy circles)
+3. add_layer("layer-tree-2", second smaller tree)
+4. add_layer("layer-clouds", cloud shapes)
+5. manage_defs("add", sky gradient)
+6. update_layer("layer-sky", '<rect width="800" height="400" fill="url(#sky-gradient)" />')
+7. preview_as_png → Check: Do shapes look right? Is layering correct?
+```
+
+### Stage 3: Color Comp (Color & Light)
+
+**Goal:** Establish final colors, gradients, lighting, and atmospheric effects.
+
+```
+What to do:
+- Apply final gradients and color palette
+- Add shadows and highlights
+- Set proper opacity for depth layers
+- Add atmospheric effects (fog, vignette)
+- Focus: "Do the colors and lighting work?"
+
+Typical tools: manage_defs, update_layer, set_layer_opacity, add_layer
+Review criteria: Unity (color consistency), Variety (color temperature), Emphasis
+```
+
+```
+Example color comp workflow:
+1. manage_defs("add", refined gradients for sky, mountains, ground)
+2. update layers to use gradient fills
+3. add_layer("layer-shadows", shadow shapes behind trees)
+4. set_layer_opacity("layer-mountain", 0.6) for atmospheric depth
+5. add_layer("layer-sunlight", golden highlight overlay)
+6. preview_as_png → Check: Does the palette work? Is the lighting consistent?
+```
+
+### Stage 4: Final (Detail & Polish)
+
+**Goal:** Add fine details, textures, and final touches. Polish everything.
+
+```
+What to do:
+- Add fine details (leaf texture, bark lines, flower petals)
+- Add small foreground elements
+- Refine any rough edges
+- Final lighting adjustments
+- Add any animation if needed
+- Focus: "Is it polished?"
+
+Typical tools: update_layer, add_layer, preview_as_png (frequent)
+Review criteria: All 7 dimensions — full review
+```
+
+```
+Example final polish workflow:
+1. update foreground tree with bark detail lines
+2. add_layer("layer-flowers", small foreground flowers)
+3. add_layer("layer-birds", small bird silhouettes in sky)
+4. add_layer("layer-vignette", subtle edge darkening)
+5. preview_as_png → Full 7-dimension review
+6. Fix any issues found
+7. preview_as_png → Confirm fixes
+```
+
+### Iteration Rules
+
+1. **Never skip stages** — even simple artwork benefits from this progression
+2. **Don't detail too early** — resist adding fine detail before composition is locked
+3. **Preview at every stage gate** — always check before moving to the next stage
+4. **It's OK to go back** — if Stage 3 reveals a composition issue, go back to Stage 1/2
+5. **Time allocation** — roughly 15% rough, 25% refined, 30% color, 30% final
+
+## Export & Optimization
+
+### SVG Accessibility
+
+Making SVG artwork accessible ensures it can be understood by screen readers and assistive technologies. Add semantic information using `<title>`, `<desc>`, and ARIA attributes.
+
+```xml
+<!-- Accessible SVG with title and description -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"
+     role="img" aria-labelledby="svg-title svg-desc">
+  <title id="svg-title">Sunset Mountain Landscape</title>
+  <desc id="svg-desc">
+    A serene mountain landscape at sunset with orange and purple sky,
+    layered mountain ridges in blue-gray tones, and pine trees in the foreground.
+  </desc>
+
+  <!-- Scene content -->
+  <rect width="800" height="600" fill="#87CEEB" />
+  <!-- ... -->
+</svg>
+```
+
+**Accessibility best practices:**
+
+```xml
+<!-- 1. Always add <title> for the overall image description -->
+<svg role="img" aria-labelledby="title-id">
+  <title id="title-id">Brief description of the artwork</title>
+  <!-- ... -->
+</svg>
+
+<!-- 2. Add <desc> for longer descriptions of complex artwork -->
+<svg role="img" aria-labelledby="title-id desc-id">
+  <title id="title-id">City Skyline at Night</title>
+  <desc id="desc-id">
+    A dramatic nighttime cityscape featuring illuminated skyscrapers
+    against a deep blue sky with scattered stars and a crescent moon.
+  </desc>
+</svg>
+
+<!-- 3. Use aria-label for interactive or decorative elements -->
+<g aria-label="Navigation menu icon">
+  <line x1="10" y1="15" x2="40" y2="15" stroke="#333" stroke-width="3" />
+  <line x1="10" y1="25" x2="40" y2="25" stroke="#333" stroke-width="3" />
+  <line x1="10" y1="35" x2="40" y2="35" stroke="#333" stroke-width="3" />
+</g>
+
+<!-- 4. Mark purely decorative SVGs to skip screen readers -->
+<svg aria-hidden="true" role="presentation">
+  <!-- Decorative divider line — no informational content -->
+  <line x1="0" y1="0" x2="800" y2="0" stroke="#ccc" />
+</svg>
+
+<!-- 5. Add titles to individual groups for complex interactive SVGs -->
+<g>
+  <title>Mountain range in the background</title>
+  <path d="M 0 300 L 200 150 L 400 280 L 600 170 L 800 300" fill="#7B8D8E" />
+</g>
+```
+
+**When to use what:**
+- `<title>` — Always. Brief label for the SVG (like `alt` text on images)
+- `<desc>` — For complex artwork that needs a longer explanation
+- `role="img"` — Tells assistive tech to treat the SVG as a single image
+- `aria-labelledby` — Points to the title/desc elements by ID
+- `aria-hidden="true"` — For purely decorative SVGs with no informational content
+
+### SVG Optimization Considerations
+
+When preparing SVG artwork for production use, consider these optimization strategies:
+
+**Reduce redundancy:**
+- Use `<defs>` + `<use>` for repeated elements instead of duplicating SVG content
+- Define shared styles in a `<style>` block rather than inline on every element
+- Use CSS classes for common visual properties
+
+```xml
+<!-- Before: repeated inline styles -->
+<circle cx="100" cy="100" r="10" fill="#E74C3C" stroke="#333" stroke-width="1" />
+<circle cx="150" cy="100" r="10" fill="#E74C3C" stroke="#333" stroke-width="1" />
+<circle cx="200" cy="100" r="10" fill="#E74C3C" stroke="#333" stroke-width="1" />
+
+<!-- After: shared class -->
+<style>.dot { fill: #E74C3C; stroke: #333; stroke-width: 1; }</style>
+<circle cx="100" cy="100" r="10" class="dot" />
+<circle cx="150" cy="100" r="10" class="dot" />
+<circle cx="200" cy="100" r="10" class="dot" />
+```
+
+**Simplify paths:**
+- Remove unnecessary precision in coordinates (e.g., `200.000` → `200`)
+- Reduce control points where possible without losing visual quality
+- Use basic shapes (`<rect>`, `<circle>`) instead of equivalent `<path>` elements
+
+**Clean up structure:**
+- Remove empty groups and unused defs
+- Remove unnecessary attributes that match defaults (e.g., `fill-opacity="1"`)
+- Remove comments and metadata in production builds
+
+**Keep file size manageable:**
+- Large SVGs (>100KB) may benefit from simplifying background detail
+- Prefer gradients over complex textures when possible (gradient defs are smaller)
+- Consider splitting very complex scenes into layered SVG components
+
+**Maintain readability:**
+- Use meaningful `id` values (`id="sky-gradient"` not `id="g1"`)
+- Maintain consistent indentation for maintainability
+- Group related elements in `<g>` tags with descriptive `id` or `data-name` attributes

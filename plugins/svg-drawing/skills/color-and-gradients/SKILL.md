@@ -527,3 +527,416 @@ Rotate or scale the entire pattern:
 8. **Test dark and light:** Ensure your colors work against both dark and light backgrounds
 9. **Contrast matters:** Ensure sufficient contrast between foreground text/elements and backgrounds
 10. **Color temperature:** Warm colors (red, orange, yellow) feel closer; cool colors (blue, green, purple) feel farther
+
+## Mesh Gradient Simulation
+
+SVG does not natively support mesh gradients, but you can approximate them by layering multiple overlapping radial gradients with varying centers, radii, and transparency. The overlapping regions blend visually to create rich, multi-directional color transitions.
+
+### Basic Technique: Overlapping Radial Gradients
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <defs>
+    <!-- Base gradient (covers entire area) -->
+    <radialGradient id="mesh-base" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#1a1a2e" />
+      <stop offset="100%" stop-color="#16213e" />
+    </radialGradient>
+
+    <!-- Top-left warm spot -->
+    <radialGradient id="mesh-warm" cx="25%" cy="25%" r="50%">
+      <stop offset="0%" stop-color="#E74C3C" stop-opacity="0.8" />
+      <stop offset="60%" stop-color="#E74C3C" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#E74C3C" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Bottom-right cool spot -->
+    <radialGradient id="mesh-cool" cx="75%" cy="75%" r="50%">
+      <stop offset="0%" stop-color="#3498DB" stop-opacity="0.7" />
+      <stop offset="50%" stop-color="#3498DB" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#3498DB" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Center accent -->
+    <radialGradient id="mesh-accent" cx="55%" cy="40%" r="35%">
+      <stop offset="0%" stop-color="#F39C12" stop-opacity="0.6" />
+      <stop offset="70%" stop-color="#F39C12" stop-opacity="0.1" />
+      <stop offset="100%" stop-color="#F39C12" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Stack the layers -->
+  <rect width="400" height="400" fill="url(#mesh-base)" />
+  <rect width="400" height="400" fill="url(#mesh-warm)" />
+  <rect width="400" height="400" fill="url(#mesh-cool)" />
+  <rect width="400" height="400" fill="url(#mesh-accent)" />
+</svg>
+```
+
+### Realistic Mesh Gradient: Sunset Sky
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <defs>
+    <!-- Deep sky base -->
+    <linearGradient id="sky-base" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0c0c3a" />
+      <stop offset="100%" stop-color="#1a1a4e" />
+    </linearGradient>
+
+    <!-- Warm horizon glow -->
+    <radialGradient id="horizon-glow" cx="50%" cy="85%" r="60%">
+      <stop offset="0%" stop-color="#FF6B35" stop-opacity="0.9" />
+      <stop offset="40%" stop-color="#FF4500" stop-opacity="0.5" />
+      <stop offset="100%" stop-color="#FF4500" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Pink mid-sky -->
+    <radialGradient id="pink-bloom" cx="40%" cy="60%" r="45%">
+      <stop offset="0%" stop-color="#D4145A" stop-opacity="0.7" />
+      <stop offset="60%" stop-color="#D4145A" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#D4145A" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Purple upper sky -->
+    <radialGradient id="purple-haze" cx="65%" cy="30%" r="50%">
+      <stop offset="0%" stop-color="#6C3483" stop-opacity="0.6" />
+      <stop offset="70%" stop-color="#6C3483" stop-opacity="0.15" />
+      <stop offset="100%" stop-color="#6C3483" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Golden sun center -->
+    <radialGradient id="sun-center" cx="50%" cy="90%" r="25%">
+      <stop offset="0%" stop-color="#FFF9C4" stop-opacity="0.95" />
+      <stop offset="30%" stop-color="#FFD54F" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#FFD54F" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <rect width="800" height="600" fill="url(#sky-base)" />
+  <rect width="800" height="600" fill="url(#horizon-glow)" />
+  <rect width="800" height="600" fill="url(#pink-bloom)" />
+  <rect width="800" height="600" fill="url(#purple-haze)" />
+  <rect width="800" height="600" fill="url(#sun-center)" />
+</svg>
+```
+
+### Tips for Mesh Gradient Simulation
+
+- **Start with a solid or linear gradient base** that sets the overall tone
+- **Layer 3-5 radial gradients** with different centers and colors
+- **Use `stop-opacity: 0`** at the outer edge so gradients fade smoothly
+- **Vary the radius** — smaller radii create focused color spots, larger ones create washes
+- **Offset centers** — avoid centering everything; offset creates more organic transitions
+- **Reduce overall opacity** on upper layers if colors are too intense
+
+## SVG Filter Coloring
+
+SVG filters provide powerful color manipulation capabilities. `feColorMatrix` is the workhorse for color grading, tone unification, and artistic effects.
+
+### feColorMatrix for Tone Unification
+
+`feColorMatrix` applies a 4×5 matrix to every pixel's RGBA values. This is the SVG equivalent of color grading in photo/video editing.
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400">
+  <defs>
+    <!-- Warm sepia tone: shifts all colors toward warm amber -->
+    <filter id="sepia">
+      <feColorMatrix type="matrix"
+        values="0.393 0.769 0.189 0 0
+                0.349 0.686 0.168 0 0
+                0.272 0.534 0.131 0 0
+                0     0     0     1 0" />
+    </filter>
+
+    <!-- Cool blue tone: desaturate + blue shift -->
+    <filter id="cool-tone">
+      <feColorMatrix type="matrix"
+        values="0.5  0.1  0.1  0  0
+                0.1  0.5  0.2  0  0
+                0.1  0.1  0.8  0  0.1
+                0    0    0    1  0" />
+    </filter>
+
+    <!-- Desaturate (convert to grayscale) -->
+    <filter id="grayscale">
+      <feColorMatrix type="saturate" values="0" />
+    </filter>
+
+    <!-- Boost saturation (more vivid colors) -->
+    <filter id="vivid">
+      <feColorMatrix type="saturate" values="2.5" />
+    </filter>
+
+    <!-- Hue rotation (shift all hues by 90°) -->
+    <filter id="hue-shift">
+      <feColorMatrix type="hueRotate" values="90" />
+    </filter>
+  </defs>
+
+  <!-- Original -->
+  <g>
+    <rect x="10" y="10" width="120" height="80" fill="#3498DB" />
+    <rect x="10" y="50" width="120" height="80" fill="#E74C3C" />
+    <text x="70" y="155" text-anchor="middle" font-size="12">Original</text>
+  </g>
+
+  <!-- With sepia filter -->
+  <g filter="url(#sepia)" transform="translate(150, 0)">
+    <rect x="10" y="10" width="120" height="80" fill="#3498DB" />
+    <rect x="10" y="50" width="120" height="80" fill="#E74C3C" />
+    <text x="70" y="155" text-anchor="middle" font-size="12">Sepia</text>
+  </g>
+
+  <!-- With cool tone filter -->
+  <g filter="url(#cool-tone)" transform="translate(300, 0)">
+    <rect x="10" y="10" width="120" height="80" fill="#3498DB" />
+    <rect x="10" y="50" width="120" height="80" fill="#E74C3C" />
+    <text x="70" y="155" text-anchor="middle" font-size="12">Cool</text>
+  </g>
+</svg>
+```
+
+### Color Grading Techniques
+
+```xml
+<defs>
+  <!-- Golden hour: warm highlights, cool shadows -->
+  <filter id="golden-hour">
+    <feColorMatrix type="matrix"
+      values="1.2  0.1  0    0  0.05
+              0.1  1.0  0    0  0.02
+              0    0    0.8  0  0
+              0    0    0    1  0" />
+  </filter>
+
+  <!-- Moonlit night: blue shadows, desaturated -->
+  <filter id="moonlight">
+    <feColorMatrix type="matrix"
+      values="0.4  0.1  0.1  0  0
+              0.1  0.4  0.2  0  0
+              0.15 0.15 0.6  0  0.1
+              0    0    0    1  0" />
+  </filter>
+
+  <!-- High contrast dramatic -->
+  <filter id="dramatic">
+    <feColorMatrix type="matrix"
+      values="1.5  -0.2  -0.2  0  -0.1
+              -0.2  1.5  -0.2  0  -0.1
+              -0.2  -0.2  1.5  0  -0.1
+              0     0     0    1   0" />
+  </filter>
+
+  <!-- Vintage fade: reduced contrast + slight color cast -->
+  <filter id="vintage">
+    <feColorMatrix type="matrix"
+      values="0.9  0.1  0.1  0  0.05
+              0.1  0.8  0.1  0  0.05
+              0.1  0.1  0.7  0  0.1
+              0    0    0    1  0" />
+  </filter>
+</defs>
+
+<!-- Apply to an entire scene for unified mood -->
+<g filter="url(#golden-hour)">
+  <!-- All scene elements go here; the filter unifies their colors -->
+</g>
+```
+
+### Combining Filters for Complex Effects
+
+```xml
+<defs>
+  <!-- Glow + color shift combo -->
+  <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
+    <!-- Blur for glow -->
+    <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blurred" />
+    <!-- Brighten the blur -->
+    <feColorMatrix in="blurred" type="matrix"
+      values="2 0 0 0 0
+              0 2 0 0 0
+              0 0 2 0 0
+              0 0 0 1 0" result="brightened" />
+    <!-- Composite: original on top of glow -->
+    <feComposite in="SourceGraphic" in2="brightened" operator="over" />
+  </filter>
+</defs>
+```
+
+**Tips:**
+- Apply filters to `<g>` groups to color-grade entire scenes at once
+- `type="saturate"` with values `0`–`1` desaturates, `>1` boosts
+- `type="hueRotate"` accepts degrees (0–360) for color wheel rotation
+- The 4×5 matrix gives complete control: rows are output R, G, B, A; columns are input R, G, B, A, and a constant offset
+- Filters can be performance-heavy — use sparingly on complex scenes
+
+## Advanced Patterns
+
+### Complex Repeating Patterns
+
+#### Plaid / Tartan
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <defs>
+    <pattern id="plaid" width="80" height="80" patternUnits="userSpaceOnUse">
+      <!-- Base color -->
+      <rect width="80" height="80" fill="#2C3E50" />
+
+      <!-- Horizontal stripes -->
+      <rect y="0" width="80" height="10" fill="#E74C3C" opacity="0.5" />
+      <rect y="15" width="80" height="4" fill="#F1C40F" opacity="0.4" />
+      <rect y="35" width="80" height="10" fill="#E74C3C" opacity="0.5" />
+      <rect y="50" width="80" height="4" fill="#F1C40F" opacity="0.4" />
+      <rect y="65" width="80" height="8" fill="#2980B9" opacity="0.3" />
+
+      <!-- Vertical stripes (overlapping creates crosshatch) -->
+      <rect x="0" width="10" height="80" fill="#E74C3C" opacity="0.5" />
+      <rect x="15" width="4" height="80" fill="#F1C40F" opacity="0.4" />
+      <rect x="35" width="10" height="80" fill="#E74C3C" opacity="0.5" />
+      <rect x="50" width="4" height="80" fill="#F1C40F" opacity="0.4" />
+      <rect x="65" width="8" height="80" fill="#2980B9" opacity="0.3" />
+    </pattern>
+  </defs>
+
+  <rect width="400" height="400" fill="url(#plaid)" />
+</svg>
+```
+
+#### Polka Dots (Offset Rows)
+
+```xml
+<defs>
+  <!-- Offset polka dots (like real fabric) -->
+  <pattern id="polka-offset" width="40" height="36" patternUnits="userSpaceOnUse">
+    <rect width="40" height="36" fill="#FDEBD0" />
+    <!-- Row 1 dots -->
+    <circle cx="10" cy="9" r="6" fill="#E74C3C" />
+    <circle cx="30" cy="9" r="6" fill="#E74C3C" />
+    <!-- Row 2 dots (offset by half the width) -->
+    <circle cx="0" cy="27" r="6" fill="#E74C3C" />
+    <circle cx="20" cy="27" r="6" fill="#E74C3C" />
+    <circle cx="40" cy="27" r="6" fill="#E74C3C" />
+  </pattern>
+
+  <!-- Gradient polka dots -->
+  <radialGradient id="dot-gradient">
+    <stop offset="0%" stop-color="#FF69B4" />
+    <stop offset="100%" stop-color="#C0392B" />
+  </radialGradient>
+  <pattern id="polka-fancy" width="50" height="50" patternUnits="userSpaceOnUse">
+    <rect width="50" height="50" fill="#FFF5F5" />
+    <circle cx="25" cy="25" r="10" fill="url(#dot-gradient)" />
+  </pattern>
+</defs>
+```
+
+#### Stripe Variants
+
+```xml
+<defs>
+  <!-- Diagonal stripes -->
+  <pattern id="diagonal-stripes" width="20" height="20" patternUnits="userSpaceOnUse"
+           patternTransform="rotate(45)">
+    <rect width="10" height="20" fill="#3498DB" />
+    <rect x="10" width="10" height="20" fill="#2980B9" />
+  </pattern>
+
+  <!-- Pinstripes (thin lines on solid background) -->
+  <pattern id="pinstripes" width="10" height="10" patternUnits="userSpaceOnUse">
+    <rect width="10" height="10" fill="#2C3E50" />
+    <line x1="5" y1="0" x2="5" y2="10" stroke="#34495E" stroke-width="0.5" />
+  </pattern>
+
+  <!-- Candy stripes (multi-color diagonal) -->
+  <pattern id="candy-stripes" width="30" height="30" patternUnits="userSpaceOnUse"
+           patternTransform="rotate(-45)">
+    <rect width="30" height="30" fill="white" />
+    <rect width="10" height="30" fill="#E74C3C" />
+    <rect x="20" width="10" height="30" fill="#E74C3C" />
+  </pattern>
+
+  <!-- Herringbone -->
+  <pattern id="herringbone" width="24" height="24" patternUnits="userSpaceOnUse">
+    <rect width="24" height="24" fill="#D5C4A1" />
+    <path d="M 0 12 L 6 0 L 12 12 L 6 24 Z" fill="#C4A882" />
+    <path d="M 12 12 L 18 0 L 24 12 L 18 24 Z" fill="#B8976A" />
+  </pattern>
+</defs>
+```
+
+### `patternTransform` Rotation and Scaling
+
+`patternTransform` applies transforms to the pattern tile itself, without affecting the element being filled.
+
+```xml
+<defs>
+  <!-- Base pattern: simple grid -->
+  <pattern id="grid-base" width="20" height="20" patternUnits="userSpaceOnUse">
+    <rect width="20" height="20" fill="#ECF0F1" />
+    <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#BDC3C7" stroke-width="0.5" />
+  </pattern>
+
+  <!-- Same pattern rotated 45° (diamond grid) -->
+  <pattern id="grid-rotated" width="20" height="20" patternUnits="userSpaceOnUse"
+           patternTransform="rotate(45)">
+    <rect width="20" height="20" fill="#ECF0F1" />
+    <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#BDC3C7" stroke-width="0.5" />
+  </pattern>
+
+  <!-- Scaled up pattern (larger tiles) -->
+  <pattern id="grid-large" width="20" height="20" patternUnits="userSpaceOnUse"
+           patternTransform="scale(2)">
+    <rect width="20" height="20" fill="#ECF0F1" />
+    <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#BDC3C7" stroke-width="0.5" />
+  </pattern>
+
+  <!-- Combined rotation and scale -->
+  <pattern id="grid-combo" width="20" height="20" patternUnits="userSpaceOnUse"
+           patternTransform="rotate(30) scale(1.5)">
+    <rect width="20" height="20" fill="#ECF0F1" />
+    <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#BDC3C7" stroke-width="0.5" />
+  </pattern>
+</defs>
+
+<rect x="10" y="10" width="180" height="120" fill="url(#grid-base)" stroke="#999" />
+<rect x="210" y="10" width="180" height="120" fill="url(#grid-rotated)" stroke="#999" />
+<rect x="10" y="150" width="180" height="120" fill="url(#grid-large)" stroke="#999" />
+<rect x="210" y="150" width="180" height="120" fill="url(#grid-combo)" stroke="#999" />
+```
+
+### Creating Seamless Complex Patterns
+
+The key to seamless patterns is ensuring edges match. Elements that cross the tile boundary must appear on the opposite edge too.
+
+```xml
+<defs>
+  <!-- Seamless flower pattern -->
+  <pattern id="flowers" width="60" height="60" patternUnits="userSpaceOnUse">
+    <rect width="60" height="60" fill="#F0E6D2" />
+    <!-- Center flower -->
+    <circle cx="30" cy="30" r="4" fill="#E74C3C" />
+    <circle cx="30" cy="22" r="3" fill="#FF69B4" />
+    <circle cx="30" cy="38" r="3" fill="#FF69B4" />
+    <circle cx="22" cy="30" r="3" fill="#FF69B4" />
+    <circle cx="38" cy="30" r="3" fill="#FF69B4" />
+    <!-- Corner flowers (shared across 4 tiles — place at 0,0 and repeat at edges) -->
+    <circle cx="0" cy="0" r="4" fill="#3498DB" />
+    <circle cx="60" cy="0" r="4" fill="#3498DB" />
+    <circle cx="0" cy="60" r="4" fill="#3498DB" />
+    <circle cx="60" cy="60" r="4" fill="#3498DB" />
+    <!-- Small leaves -->
+    <ellipse cx="15" cy="15" rx="5" ry="2" fill="#27AE60" transform="rotate(45, 15, 15)" />
+    <ellipse cx="45" cy="45" rx="5" ry="2" fill="#27AE60" transform="rotate(45, 45, 45)" />
+  </pattern>
+</defs>
+```
+
+**Tips for advanced patterns:**
+- Use `patternTransform="rotate(N)"` for diagonal versions of any pattern
+- Scale patterns with `patternTransform="scale(N)"` to adjust density
+- Combine: `patternTransform="rotate(30) scale(0.8)"` for rotated and scaled
+- Elements at tile edges must be duplicated at the opposite edge for seamlessness
+- Layer multiple patterns by stacking filled rectangles with varying opacity

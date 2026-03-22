@@ -14,7 +14,8 @@
     "start": "npm run build && tsx server/index.ts",
     "test": "playwright test --project=integration",
     "test:e2e": "playwright test",
-    "test:full": "playwright test --project=full-flow"
+    "test:full": "playwright test --project=full-flow",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.server.json"
   },
   "keywords": [],
   "author": "weivea",

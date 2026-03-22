@@ -70,7 +70,7 @@ Browser (:5173 dev / :3000 prod)
 - **stdin interception** — PtyManager buffers keystrokes and intercepts Enter to inject selection context; the context prefix is invisible in xterm.js display (line is erased and rewritten)
 - **MCP callback architecture** — The MCP server runs as a child process of Claude CLI (spawned via `--mcp-config mcp-config.json`). It communicates with Claude over stdin/stdout (JSON-RPC) and with the Express server over HTTP. The callback URL is per-drawId via environment variable
 - **`DISABLE_PTY=1`** — Environment variable that makes the terminal WebSocket send a test-mode message instead of spawning Claude CLI; used by Playwright integration tests
-- **Backend is plain JS (ES modules)** — Only the frontend and tests use TypeScript
+- **Backend is TypeScript (ES modules, run via tsx)** — Both frontend and backend are TypeScript; server uses a separate `tsconfig.server.json` without DOM types
 
 ## Project Structure
 
@@ -82,12 +82,12 @@ Browser (:5173 dev / :3000 prod)
   - `components/SvgPreview.tsx` — SVG render + drag selection + element detection
   - `components/Terminal.tsx` — xterm.js wrapper (accepts wsUrl prop)
   - `components/DrawingCard.tsx` — History card with SVG thumbnail and delete button
-- `server/` — Node.js backend (JavaScript ES modules)
-  - `index.js` — Express + per-drawId WebSocket routing + REST API + graceful shutdown
-  - `session-manager.js` — Manages `Map<drawId, PtyManager>` instances
-  - `pty-manager.js` — Claude CLI PTY lifecycle + stdin interception + session resume support
-  - `drawing-store.js` — JSON-file CRUD for drawings (`data/drawings.json`)
-  - `mcp-server.js` — MCP `draw_svg` tool implementation (unchanged, reads callback URL from env)
+- `server/` — Node.js backend (TypeScript, run via tsx)
+  - `index.ts` — Express + per-drawId WebSocket routing + REST API + graceful shutdown
+  - `session-manager.ts` — Manages `Map<drawId, PtyManager>` instances
+  - `pty-manager.ts` — Claude CLI PTY lifecycle + stdin interception + session resume support
+  - `drawing-store.ts` — JSON-file CRUD for drawings (`data/drawings.json`)
+  - `mcp-server.ts` — MCP `draw_svg` tool implementation (reads callback URL from env)
 - `data/` — Runtime data directory (gitignored): `drawings.json`
 - `e2e/integration/` — Playwright tests that run with PTY disabled (30s timeout, 1 retry)
 - `e2e/full-flow/` — Playwright tests requiring real Claude CLI (120s timeout, 0 retries)

@@ -26,6 +26,7 @@ interface DrawingData {
 
 export class DrawingStore {
   private _cache: DrawingData | null = null;
+  private _loadPromise: Promise<DrawingData> | null = null;
 
   private async _ensureDir(): Promise<void> {
     await mkdir(DATA_DIR, { recursive: true });
@@ -33,6 +34,12 @@ export class DrawingStore {
 
   private async _load(): Promise<DrawingData> {
     if (this._cache) return this._cache;
+    if (this._loadPromise) return this._loadPromise;
+    this._loadPromise = this._doLoad();
+    return this._loadPromise;
+  }
+
+  private async _doLoad(): Promise<DrawingData> {
     try {
       const raw = await readFile(DATA_FILE, 'utf8');
       this._cache = JSON.parse(raw) as DrawingData;

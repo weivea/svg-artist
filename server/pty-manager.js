@@ -28,6 +28,9 @@ export class PtyManager {
     this.terminalWs = null;
     this.selectionContext = null; // current region selection
     this.inputBuffer = '';
+    // SVG output filter state
+    this._svgFilterState = 'passthrough'; // 'passthrough' | 'suppressing'
+    this._svgFilterBuffer = '';           // buffer for detecting split tags
   }
 
   /**
@@ -66,8 +69,8 @@ export class PtyManager {
 
     this.ptyProcess = pty.spawn(claudeBin, args, {
       name: 'xterm-256color',
-      cols: 120,
-      rows: 40,
+      cols: 80,
+      rows: 24,
       cwd: projectRoot,
       env: {
         ...process.env,
@@ -95,10 +98,13 @@ export class PtyManager {
 
     this.terminalWs = ws;
 
-    // PTY stdout -> WebSocket -> xterm.js
+    // PTY stdout -> filter SVG content -> WebSocket -> xterm.js
     const dataHandler = this.ptyProcess.onData((data) => {
       if (ws.readyState === 1) {
-        ws.send(data);
+        const filtered = this._filterSvgContent(data);
+        if (filtered) {
+          ws.send(filtered);
+        }
       }
     });
 
@@ -203,6 +209,118 @@ export class PtyManager {
     }
     lines.push(' Please only modify these elements]');
     return lines.join('\n') + '\n';
+  }
+
+  /**
+   * Filter SVG content from PTY output to prevent raw XML from cluttering terminal.
+   * Uses a state machine to detect <svg...> ... </svg> blocks and suppress them.
+   * PTY data arrives in arbitrary chunks, so we buffer a small tail to handle
+   * tags split across chunks.
+   *
+   * @param {string} data - raw PTY output chunk
+   * @returns {string|null} - filtered output to send to xterm, or null if entirely suppressed
+   */
+  _filterSvgContent(data) {
+    // Strip ANSI escape sequences for tag matching, but work on original data
+    // We search on the raw data since PTY may embed escape codes inside content
+    let result = '';
+    let i = 0;
+
+    // Prepend any leftover buffer from previous chunk
+    const combined = this._svgFilterBuffer + data;
+    this._svgFilterBuffer = '';
+
+    while (i < combined.length) {
+      if (this._svgFilterState === 'passthrough') {
+        // Look for <svg (case-insensitive) — could also appear as part of ANSI-wrapped text
+        const svgStart = this._findSvgOpen(combined, i);
+        if (svgStart === -1) {
+          // No <svg found. Pass through everything except the last few chars
+          // (which might be a partial "<sv" at the boundary)
+          const safeEnd = Math.max(i, combined.length - 5);
+          result += combined.slice(i, safeEnd);
+          this._svgFilterBuffer = combined.slice(safeEnd);
+          i = combined.length;
+        } else {
+          // Pass through everything before <svg
+          result += combined.slice(i, svgStart);
+          this._svgFilterState = 'suppressing';
+          i = svgStart;
+        }
+      } else {
+        // suppressing — look for </svg>
+        const svgEnd = this._findSvgClose(combined, i);
+        if (svgEnd === -1) {
+          // Haven't found </svg> yet — suppress everything, buffer tail
+          this._svgFilterBuffer = combined.slice(Math.max(i, combined.length - 7));
+          i = combined.length;
+        } else {
+          // Found </svg> — skip past it
+          i = svgEnd;
+          this._svgFilterState = 'passthrough';
+        }
+      }
+    }
+
+    return result || null;
+  }
+
+  /**
+   * Find the start index of an <svg tag in data, starting from `from`.
+   * Skips ANSI escape sequences embedded in the text.
+   * Returns -1 if not found.
+   */
+  _findSvgOpen(data, from) {
+    // Match <svg with optional ANSI codes interspersed
+    // Simple approach: strip ANSI from a search copy
+    const searchStr = data.slice(from).replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+    const idx = searchStr.indexOf('<svg');
+    if (idx === -1) return -1;
+
+    // Map back to original index by walking original data
+    let origIdx = from;
+    let cleanCount = 0;
+    while (origIdx < data.length && cleanCount < idx) {
+      if (data[origIdx] === '\x1b') {
+        // Skip ANSI sequence
+        const match = data.slice(origIdx).match(/^\x1b\[[0-9;]*[a-zA-Z]/);
+        if (match) {
+          origIdx += match[0].length;
+          continue;
+        }
+      }
+      origIdx++;
+      cleanCount++;
+    }
+    return origIdx;
+  }
+
+  /**
+   * Find the end position (just after </svg>) in data, starting from `from`.
+   * Returns -1 if not found.
+   */
+  _findSvgClose(data, from) {
+    const searchStr = data.slice(from).replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+    const closeTag = '</svg>';
+    const idx = searchStr.indexOf(closeTag);
+    if (idx === -1) return -1;
+
+    // Map back to original index (past the closing tag)
+    let origIdx = from;
+    let cleanCount = 0;
+    const targetCount = idx + closeTag.length;
+    while (origIdx < data.length && cleanCount < targetCount) {
+      if (data[origIdx] === '\x1b') {
+        const match = data.slice(origIdx).match(/^\x1b\[[0-9;]*[a-zA-Z]/);
+        if (match) {
+          origIdx += match[0].length;
+          continue;
+        }
+      }
+      origIdx++;
+      cleanCount++;
+    }
+    return origIdx;
   }
 
   /**

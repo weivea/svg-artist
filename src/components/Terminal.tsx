@@ -38,6 +38,13 @@ export default function Terminal({ wsUrl }: TerminalProps) {
 
     ws.onopen = () => {
       console.log('[Terminal] WebSocket connected');
+      // Send initial terminal size so PTY matches xterm.js dimensions
+      fitAddon.fit();
+      ws.send(JSON.stringify({
+        type: 'resize',
+        cols: term.cols,
+        rows: term.rows,
+      }));
     };
 
     ws.onmessage = (event) => {

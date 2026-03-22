@@ -180,15 +180,18 @@ export class PtyManager {
     ws.on('message', (message: Buffer | ArrayBuffer | Buffer[]) => {
       const input = message.toString();
 
-      // Check for JSON control messages (e.g. resize)
-      try {
-        const parsed = JSON.parse(input) as { type: string; cols?: number; rows?: number };
-        if (parsed.type === 'resize') {
-          this.resize(parsed.cols!, parsed.rows!);
-          return;
+      // Fast path: single characters and short terminal input never start with '{'
+      // Only attempt JSON parse for messages that look like JSON objects
+      if (input.length > 2 && input.charCodeAt(0) === 123 /* '{' */) {
+        try {
+          const parsed = JSON.parse(input) as { type: string; cols?: number; rows?: number };
+          if (parsed.type === 'resize') {
+            this.resize(parsed.cols!, parsed.rows!);
+            return;
+          }
+        } catch {
+          // not valid JSON, treat as terminal input
         }
-      } catch {
-        // not JSON, treat as terminal input
       }
 
       this.handleInput(input);
@@ -278,22 +281,52 @@ export class PtyManager {
   }
 
   /**
-   * Filter SVG content from PTY output to prevent raw XML from cluttering terminal.
+   * Fast check: does the string possibly contain an SVG tag?
+   * Avoids expensive regex when data is just normal terminal output.
    */
-  _filterSvgContent(data: string): string | null {
-    let result = '';
-    let i = 0;
+  private _mightContainSvg(data: string): boolean {
+    return data.indexOf('<') !== -1;
+  }
 
+  _filterSvgContent(data: string): string | null {
+    // Fast path: in passthrough mode with no buffered data, and the chunk
+    // doesn't contain '<' at all → impossible to have <svg, pass through as-is.
+    if (
+      this._svgFilterState === 'passthrough' &&
+      this._svgFilterBuffer.length === 0 &&
+      !this._mightContainSvg(data)
+    ) {
+      return data;
+    }
+
+    // Combine any buffered data with current chunk
     const combined = this._svgFilterBuffer + data;
     this._svgFilterBuffer = '';
+
+    if (this._svgFilterState === 'passthrough' && !this._mightContainSvg(combined)) {
+      // No '<' anywhere → no possible SVG tag, return everything immediately.
+      // No need to buffer trailing chars since there's nothing to match against.
+      return combined || null;
+    }
+
+    // Full filtering path (only when '<' is present or we're suppressing SVG)
+    let result = '';
+    let i = 0;
 
     while (i < combined.length) {
       if (this._svgFilterState === 'passthrough') {
         const svgStart = this._findSvgOpen(combined, i);
         if (svgStart === -1) {
-          const safeEnd = Math.max(i, combined.length - 5);
-          result += combined.slice(i, safeEnd);
-          this._svgFilterBuffer = combined.slice(safeEnd);
+          // No <svg found — pass through all content, but buffer last few chars
+          // in case an '<' at the end is the start of a split '<svg' tag
+          const lastLt = combined.lastIndexOf('<', combined.length - 1);
+          if (lastLt >= i && combined.length - lastLt < 5) {
+            // There's a trailing '<' that could be start of '<svg' split across chunks
+            result += combined.slice(i, lastLt);
+            this._svgFilterBuffer = combined.slice(lastLt);
+          } else {
+            result += combined.slice(i);
+          }
           i = combined.length;
         } else {
           result += combined.slice(i, svgStart);
@@ -319,6 +352,13 @@ export class PtyManager {
    * Find the start index of an <svg tag in data, starting from `from`.
    */
   _findSvgOpen(data: string, from: number): number {
+    // Quick indexOf check on raw data first (covers common case with no ANSI escapes)
+    const rawIdx = data.indexOf('<svg', from);
+    if (rawIdx !== -1) return rawIdx;
+
+    // Only do expensive ANSI-stripping if '<' exists (could be split by escapes)
+    if (data.indexOf('<', from) === -1) return -1;
+
     const searchStr = data.slice(from).replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
     const idx = searchStr.indexOf('<svg');
     if (idx === -1) return -1;
@@ -343,6 +383,13 @@ export class PtyManager {
    * Find the end position (just after </svg>) in data, starting from `from`.
    */
   _findSvgClose(data: string, from: number): number {
+    // Quick indexOf check on raw data first
+    const rawIdx = data.indexOf('</svg>', from);
+    if (rawIdx !== -1) return rawIdx + 6;
+
+    // Only do expensive ANSI-stripping if '<' exists
+    if (data.indexOf('<', from) === -1) return -1;
+
     const searchStr = data.slice(from).replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
     const closeTag = '</svg>';
     const idx = searchStr.indexOf(closeTag);

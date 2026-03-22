@@ -67,6 +67,9 @@ export default function SvgPreview({ svgContent, externalSelection, onSelectionC
   // Spacebar + drag panning
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept spacebar when typing in terminal or input elements
+      const target = e.target as HTMLElement;
+      if (target.closest('.terminal-pane') || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
       if (e.code === 'Space' && !e.repeat) {
         e.preventDefault();
         setIsPanning(true);
@@ -74,7 +77,11 @@ export default function SvgPreview({ svgContent, externalSelection, onSelectionC
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
-        e.preventDefault();
+        // Only preventDefault if we're not in a text input context
+        const target = e.target as HTMLElement;
+        if (!target.closest('.terminal-pane') && target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+        }
         setIsPanning(false);
         setPanStart(null);
       }
@@ -187,6 +194,9 @@ export default function SvgPreview({ svgContent, externalSelection, onSelectionC
   const handleDoubleClick = useCallback(() => {
     setScale(1);
     setTranslate({ x: 0, y: 0 });
+    setIsDragging(false);
+    setDragStart(null);
+    setSelection(null);
   }, []);
 
   // Render SVG with selection overlay

@@ -56,13 +56,30 @@ export class PtyManager {
    */
   spawn(opts: SpawnOptions = {}): IPty {
     const mcpConfigPath = join(projectRoot, 'mcp-config.json');
+    const pluginDir = join(projectRoot, 'plugins', 'svg-drawing');
+
     const systemPrompt = [
-      'You are an SVG artist. The user will describe what they want you to draw.',
-      'Use the draw_svg tool to render your artwork. Always provide complete SVG content.',
-      'Give each SVG element a meaningful id attribute for easy identification.',
-      'Use viewBox="0 0 800 600" unless the user specifies otherwise.',
-      'When the user selects a region and asks for changes, only modify the specified elements.',
-    ].join(' ');
+      'You are a professional SVG artist. Users describe artwork and you create it through layer operations.',
+      '',
+      'Workflow:',
+      '1. Analyze user request. Use reference-searcher agent for visual references when helpful.',
+      '2. Plan layer structure (background → midground → foreground).',
+      '3. Create layers one by one with add_layer.',
+      '4. Self-review with preview_as_png. Fix issues found.',
+      '5. Use get_element_bbox for precise layout positioning.',
+      '',
+      'Always give layers and elements meaningful id and data-name attributes.',
+    ].join('\n');
+
+    const layerGuide = [
+      'Layer tool usage:',
+      '- Each independent visual element goes in its own layer',
+      '- Name layers with layer-<description> format (e.g., layer-sky, layer-tree-1)',
+      '- Prefer update_layer over rebuilding layers',
+      '- Use duplicate_layer + transform_layer for repeated elements',
+      '- Put gradients/filters in manage_defs, reference by id in layers',
+      '- Self-review with preview_as_png after major changes',
+    ].join('\n');
 
     const callbackUrl = opts.callbackUrl
       || `http://localhost:${process.env.PORT || 3000}/api/svg`;
@@ -78,8 +95,10 @@ export class PtyManager {
     } else {
       args.push('--system-prompt', systemPrompt);
     }
+    args.push('--append-system-prompt', layerGuide);
+    args.push('--plugin-dir', pluginDir);
     args.push('--mcp-config', mcpConfigPath);
-    args.push('--allowedTools', 'mcp__svg-artist__draw_svg');
+    args.push('--allowedTools', 'mcp__svg-artist__*,WebSearch,WebFetch');
 
     this.ptyProcess = pty.spawn(claudeBin, args, {
       name: 'xterm-256color',

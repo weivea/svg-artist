@@ -27,7 +27,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `npm run build && DATA_DIR="${testDataDir}" DISABLE_PTY=1 node server/index.js`,
+    command: `npm run build && DATA_DIR="${testDataDir}" DISABLE_PTY=1 tsx server/index.ts`,
     port: 3000,
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,

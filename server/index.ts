@@ -1,8 +1,9 @@
-import express from 'express';
-import { createServer } from 'http';
-import { WebSocketServer } from 'ws';
+import express, { Request, Response } from 'express';
+import { createServer, IncomingMessage } from 'http';
+import { WebSocketServer, WebSocket } from 'ws';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { Duplex } from 'stream';
 import { SessionManager } from './session-manager.js';
 import { DrawingStore } from './drawing-store.js';
 
@@ -26,45 +27,49 @@ const svgWss = new WebSocketServer({ noServer: true });
 const terminalWss = new WebSocketServer({ noServer: true });
 
 // Per-drawId SVG client sets
-/** @type {Map<string, Set<import('ws').WebSocket>>} */
-const svgClientsByDrawId = new Map();
+const svgClientsByDrawId = new Map<string, Set<WebSocket>>();
 
-function getSvgClients(drawId) {
+// Extend IncomingMessage to carry drawId
+interface DrawIdRequest extends IncomingMessage {
+  _drawId?: string;
+}
+
+function getSvgClients(drawId: string): Set<WebSocket> {
   if (!svgClientsByDrawId.has(drawId)) {
     svgClientsByDrawId.set(drawId, new Set());
   }
-  return svgClientsByDrawId.get(drawId);
+  return svgClientsByDrawId.get(drawId)!;
 }
 
-function broadcastSvg(drawId, svgContent) {
+function broadcastSvg(drawId: string, svgContent: string): void {
   const clients = svgClientsByDrawId.get(drawId);
   if (!clients) return;
   const message = JSON.stringify({ type: 'svg_update', svg: svgContent });
   for (const client of clients) {
-    if (client.readyState === 1) {
+    if (client.readyState === WebSocket.OPEN) {
       client.send(message);
     }
   }
 }
 
 // --- SVG WebSocket connection handler ---
-svgWss.on('connection', (ws, request) => {
-  const drawId = request._drawId; // attached during upgrade
+svgWss.on('connection', (ws: WebSocket, request: DrawIdRequest) => {
+  const drawId = request._drawId!;
   const clients = getSvgClients(drawId);
   clients.add(ws);
   console.log(`[SVG WS] Client connected for drawId=${drawId}, clients=${clients.size}`);
 
-  ws.on('message', (message) => {
+  ws.on('message', (message: Buffer | ArrayBuffer | Buffer[]) => {
     try {
-      const data = JSON.parse(message.toString());
+      const data = JSON.parse(message.toString()) as { type: string; selection?: unknown };
       const manager = sessionManager.sessions.get(drawId);
       if (!manager) return;
       if (data.type === 'selection') {
-        manager.setSelection(data.selection);
+        manager.setSelection(data.selection as import('./pty-manager.js').SelectionData);
       } else if (data.type === 'clear_selection') {
         manager.clearSelection();
       }
-    } catch (e) {
+    } catch {
       // ignore non-JSON messages
     }
   });
@@ -79,8 +84,8 @@ svgWss.on('connection', (ws, request) => {
 });
 
 // --- Terminal WebSocket connection handler ---
-terminalWss.on('connection', async (ws, request) => {
-  const drawId = request._drawId;
+terminalWss.on('connection', async (ws: WebSocket, request: DrawIdRequest) => {
+  const drawId = request._drawId!;
   console.log(`[Terminal WS] Client connected for drawId=${drawId}`);
 
   if (process.env.DISABLE_PTY === '1') {
@@ -107,10 +112,7 @@ terminalWss.on('connection', async (ws, request) => {
   const manager = sessionManager.getOrCreate(drawId);
   const callbackUrl = `http://localhost:${PORT}/api/svg/${drawId}`;
 
-  // Determine if this is a resume (has existing PTY) or fresh start
-  const isResume = manager.ptyProcess !== null ? false : true;
   // For resume: check if there's an existing Claude session to resume
-  // A session should be resumed if the drawing was previously created (not brand new)
   const hasExistingSession = drawing.updatedAt !== drawing.createdAt;
 
   manager.attachWebSocket(ws, {
@@ -123,7 +125,6 @@ terminalWss.on('connection', async (ws, request) => {
   ws.on('close', () => {
     console.log(`[Terminal WS] Client disconnected for drawId=${drawId}`);
     setTimeout(() => {
-      // Only destroy if no new terminal connected
       if (!sessionManager.hasActiveTerminal(drawId)) {
         sessionManager.destroy(drawId);
       }
@@ -132,8 +133,8 @@ terminalWss.on('connection', async (ws, request) => {
 });
 
 // --- HTTP upgrade routing ---
-server.on('upgrade', (request, socket, head) => {
-  const { pathname } = new URL(request.url, `http://${request.headers.host}`);
+server.on('upgrade', (request: DrawIdRequest, socket: Duplex, head: Buffer) => {
+  const { pathname } = new URL(request.url!, `http://${request.headers.host}`);
 
   // Match /ws/svg/:drawId
   const svgMatch = pathname.match(/^\/ws\/svg\/(.+)$/);
@@ -159,11 +160,12 @@ server.on('upgrade', (request, socket, head) => {
 });
 
 // --- SVG callback endpoint (called by MCP Server) ---
-app.post('/api/svg/:drawId', async (req, res) => {
-  const { svg } = req.body;
-  const { drawId } = req.params;
+app.post('/api/svg/:drawId', async (req: Request, res: Response) => {
+  const { svg } = req.body as { svg?: string };
+  const drawId = req.params.drawId as string;
   if (!svg) {
-    return res.status(400).json({ error: 'Missing svg field' });
+    res.status(400).json({ error: 'Missing svg field' });
+    return;
   }
   broadcastSvg(drawId, svg);
   await drawingStore.updateSvg(drawId, svg);
@@ -172,34 +174,34 @@ app.post('/api/svg/:drawId', async (req, res) => {
 });
 
 // --- Drawings REST API ---
-app.get('/api/drawings', async (req, res) => {
+app.get('/api/drawings', async (_req: Request, res: Response) => {
   const drawings = await drawingStore.list();
   res.json({ drawings });
 });
 
-app.post('/api/drawings', async (req, res) => {
+app.post('/api/drawings', async (_req: Request, res: Response) => {
   const drawing = await drawingStore.create();
   res.json(drawing);
 });
 
-app.delete('/api/drawings/:drawId', async (req, res) => {
-  const { drawId } = req.params;
-  // Kill active session if any
+app.delete('/api/drawings/:drawId', async (req: Request, res: Response) => {
+  const drawId = req.params.drawId as string;
   sessionManager.destroy(drawId);
   const deleted = await drawingStore.delete(drawId);
   if (!deleted) {
-    return res.status(404).json({ error: 'Drawing not found' });
+    res.status(404).json({ error: 'Drawing not found' });
+    return;
   }
   res.json({ ok: true });
 });
 
 // Health check
-app.get('/api/health', (req, res) => {
+app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok' });
 });
 
 // SPA fallback (Express 5 requires named wildcard parameter)
-app.get('/{*splat}', (req, res) => {
+app.get('/{*splat}', (_req: Request, res: Response) => {
   res.sendFile(join(__dirname, '..', 'dist', 'index.html'));
 });
 

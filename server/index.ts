@@ -4,6 +4,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { Duplex } from 'stream';
+import { rm } from 'fs/promises';
 import { SessionManager } from './session-manager.js';
 import { DrawingStore } from './drawing-store.js';
 import { SvgEngine } from './svg-engine.js';
@@ -466,6 +467,9 @@ app.delete('/api/drawings/:drawId', async (req: Request, res: Response) => {
     res.status(404).json({ error: 'Drawing not found' });
     return;
   }
+  // Clean up reference images for this drawing
+  const refsDir = join(__dirname, '..', 'data', 'references', drawId);
+  rm(refsDir, { recursive: true, force: true }).catch(() => {});
   res.json({ ok: true });
 });
 

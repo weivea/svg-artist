@@ -88,7 +88,7 @@ Browser (:5173 dev / :3000 prod)
 - **stdin interception** — PtyManager buffers keystrokes and intercepts Enter to inject selection context; the context prefix is invisible in xterm.js display (line is erased and rewritten)
 - **MCP callback architecture** — The MCP server runs as a child process of Claude CLI (spawned via `--mcp-config mcp-config.json`). It communicates with Claude over stdin/stdout (JSON-RPC) and with the Express server over HTTP. The callback URL is per-drawId via environment variable
 - **Layer-based drawing** — SVG content is structured using `<g>` layers with `id="layer-*"` and `data-name` attributes. SvgEngine parses SVG with linkedom, applies layer operations, and serializes back. Write operations return minimal JSON (not full SVG) to avoid large payloads
-- **Drawing plugin** — `plugins/svg-drawing/` loaded via `--plugin-dir` provides 10 drawing skills (svg-fundamentals, bezier-and-curves, color-and-gradients, composition, layer-workflow, svg-filters-and-effects, illustration-styles, character-illustration, advanced-color-composition, materials-and-textures), 2 agents (reference-searcher with haiku model, design-advisor with sonnet model), and 2 commands (`/reference`, `/design`)
+- **Drawing plugin** — `plugins/svg-drawing/` loaded via `--plugin-dir` provides 10 drawing skills (svg-fundamentals, bezier-and-curves, color-and-gradients, composition, layer-workflow, svg-filters-and-effects, illustration-styles, character-illustration, advanced-color-composition, materials-and-textures), 2 agents (design-advisor with sonnet model for integrated research + design, reference-searcher deprecated), and 2 commands (`/reference`, `/design`). The design-advisor agent searches the web, downloads and compresses reference images to `data/references/<drawId>/`, analyzes them visually, and generates design proposals.
 - **22 MCP tools** — Information query (3), layer management (7), transform & style (3), defs resources (2), canvas (1), preview (2), professional tools (4: apply_filter, apply_style_preset, get_color_palette, critique_composition)
 - **`DISABLE_PTY=1`** — Environment variable that makes the terminal WebSocket send a test-mode message instead of spawning Claude CLI; used by Playwright integration tests
 - **Backend is TypeScript (ES modules, run via tsx)** — Both frontend and backend are TypeScript; server uses a separate `tsconfig.server.json` without DOM types
@@ -115,7 +115,7 @@ Browser (:5173 dev / :3000 prod)
   - `style-presets.ts` — 6 style preset builders (flat, isometric, line-art, watercolor, retro, minimalist)
   - `color-palettes.ts` — HSL-based color palette generation with theme/mood mappings
   - `composition-analyzer.ts` — 7-dimension composition analysis (purpose, hierarchy, unity, variety, proportion, rhythm, emphasis)
-- `data/` — Runtime data directory (gitignored): `drawings.json`
+- `data/` — Runtime data directory (gitignored): `drawings.json`, `references/<drawId>/` (downloaded reference images)
 - `e2e/integration/` — Playwright tests that run with PTY disabled (30s timeout, 1 retry)
 - `e2e/full-flow/` — Playwright tests requiring real Claude CLI (120s timeout, 0 retries)
 - `e2e/helpers/` — Test fixtures, SVG samples, and navigation helpers
@@ -132,8 +132,8 @@ Browser (:5173 dev / :3000 prod)
   - `skills/character-illustration/SKILL.md` — Proportion systems, facial expressions, poses, hair/clothing, character consistency, stylization levels
   - `skills/advanced-color-composition/SKILL.md` — Advanced palettes, color psychology, WCAG accessibility, golden ratio, Gestalt principles, visual hierarchy
   - `skills/materials-and-textures/SKILL.md` — 10 material types (metal, glass, wood, water, fabric, stone, skin, fur, brick, ice) with SVG defs code
-  - `agents/reference-searcher.md` — Haiku model sub-agent for reference image search
-  - `agents/design-advisor.md` — Sonnet model sub-agent for professional design critique and guidance
+  - `agents/reference-searcher.md` — Deprecated, redirects to design-advisor (kept for backward compatibility)
+  - `agents/design-advisor.md` — Sonnet model sub-agent for integrated visual research (web search, image download/compress, multimodal analysis) and professional design critique with 2-3 approach proposals
   - `commands/reference.md` — `/reference` slash command for finding reference images
   - `commands/design.md` — `/design` slash command for requesting design advice and composition critique
 - `docs/plans/` — Design and implementation plan documents

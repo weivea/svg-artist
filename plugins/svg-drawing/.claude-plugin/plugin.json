@@ -1,0 +1,6 @@
+{
+  "name": "svg-drawing",
+  "description": "Professional SVG drawing skills, agents, and workflows for Claude-powered artwork creation",
+  "version": "0.1.0",
+  "author": { "name": "SVG Artist" }
+}

@@ -31,9 +31,13 @@ export class PtyManager {
   }
 
   /**
-   * Spawn claude CLI in a real PTY
+   * Spawn claude CLI in a real PTY.
+   * @param {object} opts
+   * @param {string} opts.sessionId - Claude CLI session UUID
+   * @param {boolean} opts.isResume - true to use --resume instead of --session-id
+   * @param {string} opts.callbackUrl - SVG callback URL including drawId
    */
-  spawn() {
+  spawn(opts = {}) {
     const mcpConfigPath = join(projectRoot, 'mcp-config.json');
     const systemPrompt = [
       'You are an SVG artist. The user will describe what they want you to draw.',
@@ -43,18 +47,31 @@ export class PtyManager {
       'When the user selects a region and asks for changes, only modify the specified elements.',
     ].join(' ');
 
-    this.ptyProcess = pty.spawn(claudeBin, [
-      '--mcp-config', mcpConfigPath,
-      '--system-prompt', systemPrompt,
-      '--allowedTools', 'mcp__svg-artist__draw_svg',
-    ], {
+    const callbackUrl = opts.callbackUrl
+      || `http://localhost:${process.env.PORT || 3000}/api/svg`;
+
+    const args = [];
+    if (opts.sessionId) {
+      if (opts.isResume) {
+        args.push('--resume', opts.sessionId);
+      } else {
+        args.push('--session-id', opts.sessionId);
+        args.push('--system-prompt', systemPrompt);
+      }
+    } else {
+      args.push('--system-prompt', systemPrompt);
+    }
+    args.push('--mcp-config', mcpConfigPath);
+    args.push('--allowedTools', 'mcp__svg-artist__draw_svg');
+
+    this.ptyProcess = pty.spawn(claudeBin, args, {
       name: 'xterm-256color',
       cols: 120,
       rows: 40,
       cwd: projectRoot,
       env: {
         ...process.env,
-        SVG_CALLBACK_URL: `http://localhost:${process.env.PORT || 3000}/api/svg`,
+        SVG_CALLBACK_URL: callbackUrl,
       },
     });
 
@@ -71,9 +88,9 @@ export class PtyManager {
   /**
    * Attach a WebSocket client to the PTY
    */
-  attachWebSocket(ws) {
+  attachWebSocket(ws, spawnOpts = {}) {
     if (!this.ptyProcess) {
-      this.spawn();
+      this.spawn(spawnOpts);
     }
 
     this.terminalWs = ws;

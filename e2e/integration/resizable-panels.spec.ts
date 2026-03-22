@@ -64,4 +64,33 @@ test.describe('Resizable Panels', () => {
     expect(svgBox!.width).toBeGreaterThan(expectedWidth - 20);
     expect(svgBox!.width).toBeLessThan(expectedWidth + 20);
   });
+
+  test('pane width respects minimum 20% constraint', async ({ page, apiContext }) => {
+    await createAndNavigateToDrawing(page, apiContext);
+    const divider = page.locator('.pane-divider');
+    const svgPane = page.locator('.svg-pane');
+    const drawContent = page.locator('.draw-content');
+    await expect(divider).toBeVisible();
+
+    const containerBox = await drawContent.boundingBox();
+    expect(containerBox).toBeTruthy();
+
+    // Drag divider far to the left (try to make SVG pane tiny)
+    const dividerBox = await divider.boundingBox();
+    expect(dividerBox).toBeTruthy();
+    const startX = dividerBox!.x + dividerBox!.width / 2;
+    const startY = dividerBox!.y + dividerBox!.height / 2;
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(containerBox!.x + 10, startY, { steps: 5 });
+    await page.mouse.up();
+
+    const svgBox = await svgPane.boundingBox();
+    expect(svgBox).toBeTruthy();
+
+    // SVG pane should be at least ~20% of container width
+    const minExpected = containerBox!.width * 0.18; // small tolerance
+    expect(svgBox!.width).toBeGreaterThan(minExpected);
+  });
 });

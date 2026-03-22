@@ -1,10 +1,26 @@
 import pty from 'node-pty';
+import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const projectRoot = join(__dirname, '..');
+
+/**
+ * Resolve the full path to the claude CLI binary.
+ * node-pty's posix_spawnp may not find binaries that are only on the
+ * user's interactive-shell PATH, so we resolve it once at startup.
+ */
+function resolveClaudePath() {
+  try {
+    return execSync('which claude', { encoding: 'utf8' }).trim();
+  } catch {
+    return 'claude'; // fallback — let node-pty try PATH
+  }
+}
+
+const claudeBin = resolveClaudePath();
 
 export class PtyManager {
   constructor() {
@@ -27,7 +43,7 @@ export class PtyManager {
       'When the user selects a region and asks for changes, only modify the specified elements.',
     ].join(' ');
 
-    this.ptyProcess = pty.spawn('claude', [
+    this.ptyProcess = pty.spawn(claudeBin, [
       '--mcp-config', mcpConfigPath,
       '--system-prompt', systemPrompt,
       '--allowedTools', 'mcp__svg-artist__draw_svg',

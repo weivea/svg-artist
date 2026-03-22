@@ -1,18 +1,13 @@
 import { PtyManager } from './pty-manager.js';
 
 export class SessionManager {
-  constructor() {
-    /** @type {Map<string, PtyManager>} */
-    this.sessions = new Map();
-  }
+  sessions: Map<string, PtyManager> = new Map();
 
   /**
    * Get existing PtyManager for a drawId, or create a new one.
    * Does NOT spawn the PTY — that happens on attachWebSocket.
-   * @param {string} drawId
-   * @returns {PtyManager}
    */
-  getOrCreate(drawId) {
+  getOrCreate(drawId: string): PtyManager {
     let manager = this.sessions.get(drawId);
     if (!manager) {
       manager = new PtyManager();
@@ -24,19 +19,16 @@ export class SessionManager {
 
   /**
    * Check if a drawId has an active terminal WebSocket attached.
-   * @param {string} drawId
-   * @returns {boolean}
    */
-  hasActiveTerminal(drawId) {
+  hasActiveTerminal(drawId: string): boolean {
     const manager = this.sessions.get(drawId);
     return !!(manager && manager.terminalWs);
   }
 
   /**
    * Destroy a session: kill PTY process and remove from map.
-   * @param {string} drawId
    */
-  destroy(drawId) {
+  destroy(drawId: string): void {
     const manager = this.sessions.get(drawId);
     if (manager) {
       manager.kill();
@@ -48,7 +40,7 @@ export class SessionManager {
   /**
    * Destroy all sessions (server shutdown).
    */
-  destroyAll() {
+  destroyAll(): void {
     for (const [drawId, manager] of this.sessions) {
       manager.kill();
       console.log(`[SessionManager] Destroyed session for drawId=${drawId}`);

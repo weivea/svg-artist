@@ -4,6 +4,7 @@ import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { PtyManager } from './pty-manager.js';
+import { DrawingStore } from './drawing-store.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -21,6 +22,7 @@ app.use(express.static(join(__dirname, '..', 'dist')));
 const svgWss = new WebSocketServer({ noServer: true });
 const svgClients = new Set();
 const ptyManager = new PtyManager();
+const drawingStore = new DrawingStore();
 
 svgWss.on('connection', (ws) => {
   svgClients.add(ws);
@@ -95,6 +97,25 @@ app.post('/api/svg', (req, res) => {
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
+});
+
+// --- Drawings REST API ---
+app.get('/api/drawings', async (req, res) => {
+  const drawings = await drawingStore.list();
+  res.json({ drawings });
+});
+
+app.post('/api/drawings', async (req, res) => {
+  const drawing = await drawingStore.create();
+  res.json(drawing);
+});
+
+app.delete('/api/drawings/:drawId', async (req, res) => {
+  const deleted = await drawingStore.delete(req.params.drawId);
+  if (!deleted) {
+    return res.status(404).json({ error: 'Drawing not found' });
+  }
+  res.json({ ok: true });
 });
 
 // SPA fallback (Express 5 requires named wildcard parameter)

@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { PtyManager } from './pty-manager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -19,10 +20,25 @@ app.use(express.static(join(__dirname, '..', 'dist')));
 // --- WebSocket A: SVG updates ---
 const svgWss = new WebSocketServer({ noServer: true });
 const svgClients = new Set();
+const ptyManager = new PtyManager();
 
 svgWss.on('connection', (ws) => {
   svgClients.add(ws);
   console.log('[SVG WS] Client connected');
+
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message.toString());
+      if (data.type === 'selection') {
+        ptyManager.setSelection(data.selection);
+      } else if (data.type === 'clear_selection') {
+        ptyManager.clearSelection();
+      }
+    } catch (e) {
+      // ignore non-JSON messages
+    }
+  });
+
   ws.on('close', () => svgClients.delete(ws));
 });
 
@@ -35,12 +51,12 @@ function broadcastSvg(svgContent) {
   }
 }
 
-// --- WebSocket B: Terminal PTY (placeholder, implemented in Task 4) ---
+// --- WebSocket B: Terminal PTY ---
 const terminalWss = new WebSocketServer({ noServer: true });
 
 terminalWss.on('connection', (ws) => {
   console.log('[Terminal WS] Client connected');
-  ws.send('\r\n*** Terminal will be connected in Task 4 ***\r\n');
+  ptyManager.attachWebSocket(ws);
 });
 
 // --- HTTP upgrade routing ---

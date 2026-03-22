@@ -1,16 +1,51 @@
 import { test, expect } from '../fixtures';
 import { COMPLEX_SCENE } from '../helpers/svg-samples';
 
+/**
+ * Post SVG via API and reliably wait for it to render in the browser.
+ *
+ * Handles the race condition where the browser's SVG WebSocket may not
+ * be connected yet when the first POST arrives. Retries posting until
+ * the content appears in the DOM.
+ */
+async function postSvgAndWaitForRender(
+  page: import('@playwright/test').Page,
+  apiContext: import('@playwright/test').APIRequestContext,
+  svg: string,
+  selectorToWait: string,
+) {
+  const locator = page.locator(selectorToWait);
+
+  for (let attempt = 0; attempt < 10; attempt++) {
+    await apiContext.post('/api/svg', { data: { svg } });
+    try {
+      await expect(locator).toBeAttached({ timeout: 500 });
+      return; // Success
+    } catch {
+      // WebSocket not yet connected or message not delivered, retry
+      await page.waitForTimeout(200);
+    }
+  }
+
+  // Final attempt with a longer timeout for a clear error message
+  await apiContext.post('/api/svg', { data: { svg } });
+  await expect(locator).toBeAttached({ timeout: 5000 });
+}
+
 test.describe('Region Selection', () => {
   test.beforeEach(async ({ page, apiContext }) => {
     await page.goto('/');
 
-    // Post the complex scene SVG and wait for it to render
-    await apiContext.post('/api/svg', {
-      data: { svg: COMPLEX_SCENE },
-    });
-    const background = page.locator('.svg-preview-container rect[id="background"]');
-    await expect(background).toBeAttached({ timeout: 5000 });
+    // Wait for the page to be interactive
+    await expect(page.locator('.xterm')).toBeAttached({ timeout: 10_000 });
+
+    // Post the complex scene SVG and wait for it to render (with retry for WS readiness)
+    await postSvgAndWaitForRender(
+      page,
+      apiContext,
+      COMPLEX_SCENE,
+      '.svg-preview-container rect[id="background"]',
+    );
   });
 
   test('drag selection creates overlay', async ({ page }) => {

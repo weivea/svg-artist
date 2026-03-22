@@ -32,4 +32,36 @@ test.describe('Resizable Panels', () => {
     expect(newBox).toBeTruthy();
     expect(newBox!.width).toBeGreaterThan(initialBox!.width + 50);
   });
+
+  test('double-clicking divider resets to 50/50', async ({ page, apiContext }) => {
+    await createAndNavigateToDrawing(page, apiContext);
+    const divider = page.locator('.pane-divider');
+    const svgPane = page.locator('.svg-pane');
+    const drawContent = page.locator('.draw-content');
+    await expect(divider).toBeVisible();
+
+    // Drag divider to change ratio
+    const dividerBox = await divider.boundingBox();
+    expect(dividerBox).toBeTruthy();
+    const startX = dividerBox!.x + dividerBox!.width / 2;
+    const startY = dividerBox!.y + dividerBox!.height / 2;
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX + 150, startY, { steps: 5 });
+    await page.mouse.up();
+
+    // Now double-click to reset
+    await divider.dblclick();
+
+    const containerBox = await drawContent.boundingBox();
+    const svgBox = await svgPane.boundingBox();
+    expect(containerBox).toBeTruthy();
+    expect(svgBox).toBeTruthy();
+
+    // SVG pane should be approximately 50% of container (within 20px tolerance for divider width)
+    const expectedWidth = containerBox!.width / 2;
+    expect(svgBox!.width).toBeGreaterThan(expectedWidth - 20);
+    expect(svgBox!.width).toBeLessThan(expectedWidth + 20);
+  });
 });

@@ -1,7 +1,13 @@
+import { getRegisteredActions } from './pipeline-engine.js';
+
 const KEBAB_CASE_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MAX_NAME_LEN = 50;
 const MAX_SKILL_SIZE = 50 * 1024;   // 50KB
 const MAX_PROMPT_SIZE = 10 * 1024;   // 10KB
+
+const VALID_ASSET_TYPES = [
+  'custom-filter', 'custom-style', 'custom-tool', 'custom-route', 'prompt-extension', 'skill',
+] as const;
 
 export interface ValidationResult {
   ok: boolean;
@@ -95,6 +101,124 @@ export function validatePromptExtension(content: string): ValidationResult {
   }
   if (content.length > MAX_PROMPT_SIZE) {
     return { ok: false, error: `Prompt extension exceeds ${MAX_PROMPT_SIZE / 1024}KB limit` };
+  }
+  return { ok: true };
+}
+
+// --- Pipeline Handler Validation ---
+
+export function validatePipelineHandler(handler: {
+  type?: string;
+  steps?: Array<{ action?: string; params?: unknown }>;
+}): ValidationResult {
+  if (!handler || typeof handler !== 'object') {
+    return { ok: false, error: 'Handler must be an object' };
+  }
+  if (handler.type !== 'pipeline') {
+    return { ok: false, error: 'Handler type must be "pipeline"' };
+  }
+  if (!Array.isArray(handler.steps) || handler.steps.length === 0) {
+    return { ok: false, error: 'Handler must have non-empty steps array' };
+  }
+  const registeredActions = getRegisteredActions();
+  for (let i = 0; i < handler.steps.length; i++) {
+    const step = handler.steps[i];
+    if (!step || typeof step !== 'object') {
+      return { ok: false, error: `Step ${i}: must be an object` };
+    }
+    if (!step.action || typeof step.action !== 'string') {
+      return { ok: false, error: `Step ${i}: must have an action string` };
+    }
+    if (!registeredActions.includes(step.action)) {
+      return { ok: false, error: `Step ${i}: unknown action "${step.action}"` };
+    }
+    if (step.params !== undefined && (typeof step.params !== 'object' || step.params === null)) {
+      return { ok: false, error: `Step ${i}: params must be an object` };
+    }
+  }
+  return { ok: true };
+}
+
+// --- Custom Tool Definition Validation ---
+
+export function validateCustomToolDefinition(definition: {
+  description?: string;
+  input_schema?: unknown;
+  handler?: { type?: string; steps?: Array<{ action?: string; params?: unknown }> };
+}): ValidationResult {
+  if (!definition || typeof definition !== 'object') {
+    return { ok: false, error: 'Tool definition must be an object' };
+  }
+  if (!definition.description || typeof definition.description !== 'string') {
+    return { ok: false, error: 'Tool definition must have a description string' };
+  }
+  if (!definition.input_schema || typeof definition.input_schema !== 'object') {
+    return { ok: false, error: 'Tool definition must have an input_schema object' };
+  }
+  if (!definition.handler) {
+    return { ok: false, error: 'Tool definition must have a handler' };
+  }
+  return validatePipelineHandler(definition.handler);
+}
+
+// --- Custom Route Definition Validation ---
+
+export function validateCustomRouteDefinition(definition: {
+  description?: string;
+  path?: string;
+  method?: string;
+  handler?: { type?: string; steps?: Array<{ action?: string; params?: unknown }> };
+}): ValidationResult {
+  if (!definition || typeof definition !== 'object') {
+    return { ok: false, error: 'Route definition must be an object' };
+  }
+  if (!definition.description || typeof definition.description !== 'string') {
+    return { ok: false, error: 'Route definition must have a description string' };
+  }
+  if (!definition.path || typeof definition.path !== 'string') {
+    return { ok: false, error: 'Route definition must have a path string' };
+  }
+  if (!definition.path.startsWith('/custom/')) {
+    return { ok: false, error: 'Route path must start with "/custom/"' };
+  }
+  if (!definition.method || typeof definition.method !== 'string') {
+    return { ok: false, error: 'Route definition must have a method string' };
+  }
+  if (definition.method.toUpperCase() !== 'POST') {
+    return { ok: false, error: 'Route method must be POST' };
+  }
+  if (!definition.handler) {
+    return { ok: false, error: 'Route definition must have a handler' };
+  }
+  return validatePipelineHandler(definition.handler);
+}
+
+// --- Rollback Validation ---
+
+export function validateRollback(params: {
+  type?: string;
+  name?: string;
+  version?: number;
+}): ValidationResult {
+  if (!params || typeof params !== 'object') {
+    return { ok: false, error: 'Rollback params must be an object' };
+  }
+  if (!params.type || typeof params.type !== 'string') {
+    return { ok: false, error: 'Rollback must have a type string' };
+  }
+  if (!(VALID_ASSET_TYPES as readonly string[]).includes(params.type)) {
+    return { ok: false, error: `Rollback type must be one of: ${VALID_ASSET_TYPES.join(', ')}` };
+  }
+  if (!params.name || typeof params.name !== 'string') {
+    return { ok: false, error: 'Rollback must have a name string' };
+  }
+  if (!KEBAB_CASE_RE.test(params.name)) {
+    return { ok: false, error: 'Rollback name must be kebab-case' };
+  }
+  if (params.version !== undefined) {
+    if (typeof params.version !== 'number' || !Number.isInteger(params.version) || params.version < 1) {
+      return { ok: false, error: 'Rollback version must be a positive integer' };
+    }
   }
   return { ok: true };
 }

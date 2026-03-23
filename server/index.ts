@@ -702,6 +702,12 @@ app.post('/api/svg/:drawId/scratch/create', async (req: Request, res: Response) 
   }
 });
 
+// List must come before :canvasId routes to avoid "list" matching as canvasId
+app.post('/api/svg/:drawId/scratch/list', async (req: Request, res: Response) => {
+  const drawId = req.params.drawId as string;
+  res.json({ canvases: scratchStore.list(drawId) });
+});
+
 app.post('/api/svg/:drawId/scratch/:canvasId/layers/add', async (req: Request, res: Response) => {
   const { name, content, parent_id, position } = req.body as { name?: string; content?: string; parent_id?: string; position?: number };
   if (!name || !content) { res.status(400).json({ error: 'Missing name or content' }); return; }
@@ -726,6 +732,19 @@ app.post('/api/svg/:drawId/scratch/:canvasId/layers/list', async (req: Request, 
   const engine = scratchStore.get(req.params.canvasId as string);
   if (!engine) { res.status(404).json({ error: 'Scratch canvas not found' }); return; }
   res.json({ layers: engine.listLayers() });
+});
+
+app.post('/api/svg/:drawId/scratch/:canvasId/preview', async (req: Request, res: Response) => {
+  const { width } = req.body as { width?: number };
+  const engine = scratchStore.get(req.params.canvasId as string);
+  if (!engine) { res.status(404).json({ error: 'Scratch canvas not found' }); return; }
+  try {
+    const png = renderSvgToPng(engine.serialize(), width || 400);
+    res.json({ image: png.toString('base64') });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `PNG render failed: ${msg}` });
+  }
 });
 
 // --- Custom Tool Execution ---

@@ -99,4 +99,51 @@ test.describe('Scratch Canvas API', () => {
     const res = await apiContext.post(`/api/svg/${drawId}/scratch/nonexistent/layers/list`);
     expect(res.status()).toBe(404);
   });
+
+  test('preview scratch canvas as PNG', async ({ apiContext }) => {
+    const drawId = await createDrawing(apiContext);
+    const createRes = await apiContext.post(`/api/svg/${drawId}/scratch/create`, {
+      data: { viewBox: '0 0 120 80' },
+    });
+    const { canvasId } = await createRes.json();
+
+    await apiContext.post(`/api/svg/${drawId}/scratch/${canvasId}/layers/add`, {
+      data: { name: 'circle', content: '<circle cx="60" cy="40" r="30" fill="red"/>' },
+    });
+
+    const res = await apiContext.post(`/api/svg/${drawId}/scratch/${canvasId}/preview`, {
+      data: { width: 200 },
+    });
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect(body.image).toBeTruthy();
+    expect(body.image.slice(0, 5)).toBe('iVBOR');
+  });
+
+  test('list scratch canvases for a drawing', async ({ apiContext }) => {
+    const drawId = await createDrawing(apiContext);
+
+    await apiContext.post(`/api/svg/${drawId}/scratch/create`, {
+      data: { viewBox: '0 0 120 80' },
+    });
+    await apiContext.post(`/api/svg/${drawId}/scratch/create`, {
+      data: { viewBox: '0 0 200 100' },
+    });
+
+    const res = await apiContext.post(`/api/svg/${drawId}/scratch/list`);
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect(body.canvases).toHaveLength(2);
+    expect(body.canvases[0].canvasId).toMatch(/^scratch-/);
+    expect(body.canvases[0].viewBox).toBeTruthy();
+    expect(body.canvases[0].layerCount).toBeDefined();
+  });
+
+  test('list scratch canvases returns empty for drawing with none', async ({ apiContext }) => {
+    const drawId = await createDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/scratch/list`);
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect(body.canvases).toHaveLength(0);
+  });
 });

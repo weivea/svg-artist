@@ -1,3 +1,5 @@
+import { loadCustomFilter } from './bootstrap-store.js';
+
 export type FilterType =
   | 'drop-shadow'
   | 'blur'
@@ -18,7 +20,7 @@ export interface FilterResult {
   filterSvg: string;
 }
 
-function randomSuffix(): string {
+export function randomSuffix(): string {
   return Math.random().toString(36).slice(2, 8);
 }
 
@@ -175,5 +177,35 @@ export function generateFilter(
   const builder = builders[filterType];
   const filterSvg = builder(filterId, params);
 
+  return { filterId, filterSvg };
+}
+
+// Render a custom filter template by replacing {{param:default}} placeholders
+function renderTemplate(template: string, id: string, params?: FilterParams): string {
+  let result = template.replace(/\{\{id\}\}/g, id);
+  result = result.replace(/\{\{(\w+):([^}]*)\}\}/g, (_match: string, name: string, defaultVal: string) => {
+    if (params && params[name] !== undefined) {
+      return String(params[name]);
+    }
+    return defaultVal;
+  });
+  return result;
+}
+
+export async function generateFilterOrCustom(
+  filterType: string,
+  params?: FilterParams,
+  suffix?: string,
+): Promise<FilterResult | null> {
+  // 1. Try built-in first
+  if (filterType in builders) {
+    return generateFilter(filterType as FilterType, params, suffix);
+  }
+  // 2. Try custom filter from bootstrap store
+  const custom = await loadCustomFilter(filterType);
+  if (!custom) return null;
+  const sfx = suffix ?? randomSuffix();
+  const filterId = `filter-${filterType}-${sfx}`;
+  const filterSvg = renderTemplate(custom.svg_template, filterId, params);
   return { filterId, filterSvg };
 }

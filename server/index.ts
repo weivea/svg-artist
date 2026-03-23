@@ -11,8 +11,18 @@ import { SvgEngine } from './svg-engine.js';
 import { renderSvgToPng, renderLayerToPng } from './png-renderer.js';
 import { generatePalettes } from './color-palettes.js';
 import { analyzeComposition } from './composition-analyzer.js';
-import type { FilterType, FilterParams } from './filter-templates.js';
+import type { FilterParams } from './filter-templates.js';
+import { generateFilterOrCustom } from './filter-templates.js';
 import type { StylePreset } from './style-presets.js';
+import {
+  validateName, validateSkillContent, validateFilterDefinition,
+  validateStyleDefinition, validatePromptExtension,
+} from './bootstrap-validator.js';
+import {
+  writeSkill, writeCustomFilter, writeCustomStyle,
+  writePromptExtension as storeWritePromptExtension,
+  listAllAssets,
+} from './bootstrap-store.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -355,8 +365,12 @@ app.post('/api/svg/:drawId/filter/apply', async (req: Request, res: Response) =>
   const drawId = req.params.drawId as string;
   const drawing = await drawingStore.get(drawId);
   if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+
+  const filterResult = await generateFilterOrCustom(filter_type, params);
+  if (!filterResult) { res.status(400).json({ error: `Unknown filter type: ${filter_type}` }); return; }
+
   const engine = new SvgEngine(drawing.svgContent);
-  const result = engine.applyFilter(layer_id, filter_type as FilterType, params);
+  const result = engine.applyFilterDef(layer_id, filterResult.filterId, filterResult.filterSvg);
   if (!result.ok) { res.status(400).json({ error: result.error }); return; }
   const svg = engine.serialize();
   await drawingStore.updateSvg(drawId, svg);
@@ -432,6 +446,93 @@ app.post('/api/svg/:drawId/canvas/bbox', async (req: Request, res: Response) => 
   const bbox = engine.getElementBBox(element_id);
   if (!bbox) { res.status(404).json({ error: 'Element not found' }); return; }
   res.json(bbox);
+});
+
+// --- Bootstrap / Self-improvement API ---
+
+app.post('/api/svg/:drawId/bootstrap/write-skill', async (req: Request, res: Response) => {
+  const { name, content } = req.body as { name?: string; content?: string };
+  if (!name || !content) { res.status(400).json({ error: 'Missing name or content' }); return; }
+  const nameCheck = validateName(name);
+  if (!nameCheck.ok) { res.status(400).json({ error: nameCheck.error }); return; }
+  const contentCheck = validateSkillContent(content);
+  if (!contentCheck.ok) { res.status(400).json({ error: contentCheck.error }); return; }
+  try {
+    await writeSkill(name, content);
+    res.json({ ok: true, path: `plugins/svg-drawing/skills/${name}/SKILL.md` });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `Failed to write skill: ${msg}` });
+  }
+});
+
+app.post('/api/svg/:drawId/bootstrap/write-filter', async (req: Request, res: Response) => {
+  const { name, definition } = req.body as { name?: string; definition?: any };
+  if (!name || !definition) { res.status(400).json({ error: 'Missing name or definition' }); return; }
+  const nameCheck = validateName(name);
+  if (!nameCheck.ok) { res.status(400).json({ error: nameCheck.error }); return; }
+  const defCheck = validateFilterDefinition(definition);
+  if (!defCheck.ok) { res.status(400).json({ error: defCheck.error }); return; }
+  try {
+    await writeCustomFilter(name, definition);
+    res.json({ ok: true, path: `data/bootstrap/custom-filters/${name}.json` });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `Failed to write filter: ${msg}` });
+  }
+});
+
+app.post('/api/svg/:drawId/bootstrap/write-style', async (req: Request, res: Response) => {
+  const { name, definition } = req.body as { name?: string; definition?: any };
+  if (!name || !definition) { res.status(400).json({ error: 'Missing name or definition' }); return; }
+  const nameCheck = validateName(name);
+  if (!nameCheck.ok) { res.status(400).json({ error: nameCheck.error }); return; }
+  const defCheck = validateStyleDefinition(definition);
+  if (!defCheck.ok) { res.status(400).json({ error: defCheck.error }); return; }
+  try {
+    await writeCustomStyle(name, definition);
+    res.json({ ok: true, path: `data/bootstrap/custom-styles/${name}.json` });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `Failed to write style: ${msg}` });
+  }
+});
+
+app.post('/api/svg/:drawId/bootstrap/write-prompt-extension', async (req: Request, res: Response) => {
+  const { name, content } = req.body as { name?: string; content?: string };
+  if (!name || !content) { res.status(400).json({ error: 'Missing name or content' }); return; }
+  const nameCheck = validateName(name);
+  if (!nameCheck.ok) { res.status(400).json({ error: nameCheck.error }); return; }
+  const contentCheck = validatePromptExtension(content);
+  if (!contentCheck.ok) { res.status(400).json({ error: contentCheck.error }); return; }
+  try {
+    await storeWritePromptExtension(name, content);
+    res.json({ ok: true, path: `data/bootstrap/prompt-extensions/${name}.md` });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `Failed to write prompt extension: ${msg}` });
+  }
+});
+
+app.post('/api/svg/:drawId/bootstrap/reload', async (req: Request, res: Response) => {
+  const { reason } = req.body as { reason?: string };
+  const drawId = req.params.drawId as string;
+  const ok = await sessionManager.respawn(drawId, reason);
+  if (!ok) {
+    res.status(404).json({ error: 'No active session for this drawing' });
+    return;
+  }
+  res.json({ ok: true, reloaded_at: new Date().toISOString() });
+});
+
+app.post('/api/svg/:drawId/bootstrap/list', async (_req: Request, res: Response) => {
+  try {
+    const assets = await listAllAssets();
+    res.json(assets);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `Failed to list assets: ${msg}` });
+  }
 });
 
 // --- SVG direct update endpoint (used by tests and internal tools) ---

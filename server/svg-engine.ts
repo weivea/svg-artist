@@ -424,6 +424,16 @@ export class SvgEngine {
     return { ok: true, filterId };
   }
 
+  /** Apply a pre-generated filter (built-in or custom) to a layer. */
+  applyFilterDef(layerId: string, filterId: string, filterSvg: string): { ok: boolean; filterId?: string; error?: string } {
+    const g = this._findLayerElement(layerId);
+    if (!g) return { ok: false, error: 'Layer not found' };
+    const added = this.manageDefs('add', filterId, filterSvg);
+    if (!added) return { ok: false, error: 'Failed to add filter to defs' };
+    g.setAttribute('filter', `url(#${filterId})`);
+    return { ok: true, filterId };
+  }
+
   /** Apply a style preset to specified layers (or all layers if none specified). */
   applyStyleToLayers(preset: StylePreset, layerIds?: string[]): { ok: boolean; affectedLayers: string[]; filters?: string[]; description?: string; error?: string } {
     const presetResult = getPresetRules(preset);

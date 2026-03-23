@@ -130,7 +130,13 @@ export class PtyManager {
       'When your current tools can\'t express your vision:',
       '- list_bootstrap_assets to check existing custom tools',
       '- write_filter / write_style / write_skill to create what you need',
+      '- write_custom_tool to define new pipeline-based tools',
+      '- write_custom_route to define new API endpoints',
+      '- get_asset_history / rollback_asset to manage versions',
       '- Batch writes, then reload_session once to apply all changes',
+      '- Custom tools use pipeline steps: get_layers, apply_filter,',
+      '  transform_layer, style_layer, etc. Design pipelines that',
+      '  compose existing actions into higher-level operations.',
     ].join('\n');
 
     const layerGuide = await this.buildDynamicPrompt();

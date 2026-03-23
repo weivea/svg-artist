@@ -40,13 +40,12 @@ export class SessionManager {
   /**
    * Respawn (kill and recreate) a session for a drawId.
    * Returns true if session existed and was respawned, false otherwise.
-   * Stub: will be fully implemented when PtyManager respawn support is added.
    */
-  async respawn(drawId: string, _reason?: string): Promise<boolean> {
+  async respawn(drawId: string, reason?: string): Promise<boolean> {
     const manager = this.sessions.get(drawId);
     if (!manager) return false;
-    // TODO: full respawn logic (kill + recreate with updated config)
-    return false;
+    await manager.respawn(reason);
+    return true;
   }
 
   /**

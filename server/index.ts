@@ -132,7 +132,7 @@ terminalWss.on('connection', async (ws: WebSocket, request: DrawIdRequest) => {
   // For resume: check if there's an existing Claude session to resume
   const hasExistingSession = drawing.updatedAt !== drawing.createdAt;
 
-  manager.attachWebSocket(ws, {
+  await manager.attachWebSocket(ws, {
     sessionId: drawing.sessionId,
     isResume: hasExistingSession,
     callbackUrl,

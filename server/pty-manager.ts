@@ -3,6 +3,7 @@ import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import type { WebSocket } from 'ws';
+import { loadAllPromptExtensions } from './bootstrap-store.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -50,11 +51,14 @@ export class PtyManager {
   inputBuffer: string = '';
   private _svgFilterState: SvgFilterState = 'passthrough';
   private _svgFilterBuffer: string = '';
+  private _lastSpawnOpts: SpawnOptions | null = null;
+  private _dataHandler: { dispose: () => void } | null = null;
 
   /**
    * Spawn claude CLI in a real PTY.
    */
-  spawn(opts: SpawnOptions = {}): IPty {
+  async spawn(opts: SpawnOptions = {}): Promise<IPty> {
+    this._lastSpawnOpts = { ...opts };
     const mcpConfigPath = join(projectRoot, 'mcp-config.json');
     const pluginDir = join(projectRoot, 'plugins', 'svg-drawing');
 
@@ -92,34 +96,16 @@ export class PtyManager {
       '     Purpose → Hierarchy → Unity → Variety → Proportion → Rhythm → Emphasis',
       '7. REFINE: Fix issues found in review. Repeat steps 6-7 until',
       '   the critique score is satisfactory and the preview looks right.',
+      '8. SELF-IMPROVE: If you encounter a capability gap during drawing:',
+      '   - Use list_bootstrap_assets to see what custom tools exist',
+      '   - Use write_filter/write_style/write_skill to create what you need',
+      '   - Use reload_session to apply changes (auto-continues your work)',
+      '   - Batch multiple writes before a single reload for efficiency',
       '',
       'Always give layers and elements meaningful id and data-name attributes.',
     ].join('\n');
 
-    const layerGuide = [
-      'Layer tool usage:',
-      '- Each independent visual element goes in its own layer',
-      '- Name layers with layer-<description> format (e.g., layer-sky, layer-tree-1)',
-      '- Prefer update_layer over rebuilding layers',
-      '- Use duplicate_layer + transform_layer for repeated elements',
-      '- Put gradients/filters in manage_defs, reference by id in layers',
-      '- Self-review with preview_as_png after major changes',
-      '',
-      'Skill loading strategy:',
-      '- Load only the skills relevant to the current task (not all 10)',
-      '- For any drawing task, always load layer-workflow first',
-      '- Load svg-filters-and-effects when textures, shadows, or lighting are needed',
-      '- Load illustration-styles when a specific visual style is requested',
-      '- Load character-illustration for any human/animal characters',
-      '- Load materials-and-textures for realistic object rendering',
-      '- Load advanced-color-composition for complex scenes or specific mood requests',
-      '',
-      'New tools available:',
-      '- apply_filter: Apply preset filter effects (drop-shadow, glow, metallic, etc.)',
-      '- apply_style_preset: Apply unified style across layers (flat, isometric, etc.)',
-      '- get_color_palette: Generate harmonious color palettes by theme/mood',
-      '- critique_composition: Get automated composition analysis with scores and suggestions',
-    ].join('\n');
+    const layerGuide = await this.buildDynamicPrompt();
 
     const callbackUrl = opts.callbackUrl
       || `http://localhost:${process.env.PORT || 3000}/api/svg`;
@@ -161,18 +147,63 @@ export class PtyManager {
     return this.ptyProcess;
   }
 
+  private async buildDynamicPrompt(): Promise<string> {
+    const base = [
+      'Layer tool usage:',
+      '- Each independent visual element goes in its own layer',
+      '- Name layers with layer-<description> format (e.g., layer-sky, layer-tree-1)',
+      '- Prefer update_layer over rebuilding layers',
+      '- Use duplicate_layer + transform_layer for repeated elements',
+      '- Put gradients/filters in manage_defs, reference by id in layers',
+      '- Self-review with preview_as_png after major changes',
+      '',
+      'Skill loading strategy:',
+      '- Load only the skills relevant to the current task (not all 10)',
+      '- For any drawing task, always load layer-workflow first',
+      '- Load svg-filters-and-effects when textures, shadows, or lighting are needed',
+      '- Load illustration-styles when a specific visual style is requested',
+      '- Load character-illustration for any human/animal characters',
+      '- Load materials-and-textures for realistic object rendering',
+      '- Load advanced-color-composition for complex scenes or specific mood requests',
+      '',
+      'New tools available:',
+      '- apply_filter: Apply preset filter effects (drop-shadow, glow, metallic, etc.)',
+      '- apply_style_preset: Apply unified style across layers (flat, isometric, etc.)',
+      '- get_color_palette: Generate harmonious color palettes by theme/mood',
+      '- critique_composition: Get automated composition analysis with scores and suggestions',
+      '',
+      'Self-improvement capabilities:',
+      '- write_skill: Create/update drawing skills for future use',
+      '- write_filter: Create custom SVG filter templates',
+      '- write_style: Create custom style presets',
+      '- write_prompt_extension: Add to your own system prompt',
+      '- reload_session: Apply all changes (auto-restarts and continues)',
+      '- list_bootstrap_assets: View all custom assets',
+      '',
+      'When you find your current tools insufficient for a task,',
+      'create the tools/skills you need, reload, and continue.',
+      'Batch multiple writes before a single reload for efficiency.',
+    ].join('\n');
+
+    const extensions = await loadAllPromptExtensions();
+    if (extensions) {
+      return base + '\n\n' + extensions;
+    }
+    return base;
+  }
+
   /**
    * Attach a WebSocket client to the PTY
    */
-  attachWebSocket(ws: WebSocket, spawnOpts: SpawnOptions = {}): void {
+  async attachWebSocket(ws: WebSocket, spawnOpts: SpawnOptions = {}): Promise<void> {
     if (!this.ptyProcess) {
-      this.spawn(spawnOpts);
+      await this.spawn(spawnOpts);
     }
 
     this.terminalWs = ws;
 
     // PTY stdout -> filter SVG content -> WebSocket -> xterm.js
-    const dataHandler = this.ptyProcess!.onData((data: string) => {
+    this._dataHandler = this.ptyProcess!.onData((data: string) => {
       if (ws.readyState === 1) {
         const filtered = this._filterSvgContent(data);
         if (filtered) {
@@ -203,10 +234,116 @@ export class PtyManager {
     });
 
     ws.on('close', () => {
-      dataHandler.dispose();
+      if (this._dataHandler) {
+        this._dataHandler.dispose();
+        this._dataHandler = null;
+      }
       this.terminalWs = null;
       console.log('[PTY] WebSocket disconnected');
     });
+  }
+
+  /**
+   * Respawn the Claude CLI process with updated capabilities.
+   * Kills the current process, spawns a new one with --resume,
+   * reattaches the WebSocket, and injects a continuation prompt.
+   */
+  async respawn(reason?: string): Promise<void> {
+    const sessionId = this._lastSpawnOpts?.sessionId;
+    const callbackUrl = this._lastSpawnOpts?.callbackUrl;
+    const ws = this.terminalWs;
+
+    // Notify terminal
+    if (ws && ws.readyState === 1) {
+      ws.send('\r\n\x1b[33m[Reloading with upgraded capabilities...]\x1b[0m\r\n');
+    }
+
+    // Dispose existing data handler
+    if (this._dataHandler) {
+      this._dataHandler.dispose();
+      this._dataHandler = null;
+    }
+
+    // Kill current process
+    if (this.ptyProcess) {
+      this.ptyProcess.kill();
+      this.ptyProcess = null;
+    }
+
+    // Brief pause for process cleanup
+    await new Promise(r => setTimeout(r, 500));
+
+    // Respawn with resume
+    await this.spawn({
+      sessionId,
+      isResume: true,
+      callbackUrl,
+    });
+
+    // Reattach WebSocket to new PTY
+    if (ws && ws.readyState === 1) {
+      this.reattachWebSocket(ws);
+    }
+
+    // Wait for ready, then inject continuation prompt
+    this.waitForReadyAndInject(reason);
+  }
+
+  private reattachWebSocket(ws: WebSocket): void {
+    if (!this.ptyProcess) return;
+    this.terminalWs = ws;
+
+    this._dataHandler = this.ptyProcess.onData((data: string) => {
+      if (ws.readyState === 1) {
+        const filtered = this._filterSvgContent(data);
+        if (filtered) {
+          ws.send(filtered);
+        }
+      }
+    });
+  }
+
+  private waitForReadyAndInject(reason?: string): void {
+    if (!this.ptyProcess) return;
+
+    let injected = false;
+
+    // Debounce-based ready detection: when PTY output stops for 2s, assume ready
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const outputHandler = this.ptyProcess.onData(() => {
+      if (injected) return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        if (!injected) {
+          injected = true;
+          outputHandler.dispose();
+          this.injectContinuationPrompt(reason);
+        }
+      }, 2000);
+    });
+
+    // Hard timeout fallback: 15 seconds
+    setTimeout(() => {
+      if (!injected) {
+        injected = true;
+        outputHandler.dispose();
+        if (debounceTimer) clearTimeout(debounceTimer);
+        this.injectContinuationPrompt(reason);
+      }
+    }, 15_000);
+  }
+
+  private injectContinuationPrompt(reason?: string): void {
+    if (!this.ptyProcess) return;
+
+    const message = [
+      'I just upgraded my capabilities:',
+      reason || 'System reload with latest changes',
+      '',
+      'Continue where I left off with the current task.',
+    ].join('\n');
+
+    this.ptyProcess.write(message + '\r');
   }
 
   /**

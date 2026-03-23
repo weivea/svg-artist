@@ -18,6 +18,7 @@ import {
   validateName, validateSkillContent, validateFilterDefinition,
   validateStyleDefinition, validatePromptExtension,
   validateCustomToolDefinition, validateCustomRouteDefinition,
+  validateMacroDefinition,
   validateRollback,
 } from './bootstrap-validator.js';
 import {
@@ -26,10 +27,12 @@ import {
   listAllAssets,
   writeCustomTool, loadCustomTool,
   writeCustomRoute, loadCustomRoute,
+  writeCustomMacro, loadCustomMacro,
   getAssetHistory, rollbackAsset,
 } from './bootstrap-store.js';
 import { executePipeline } from './pipeline-engine.js';
-import type { PipelineDeps } from './pipeline-engine.js';
+import type { PipelineContext, PipelineDeps } from './pipeline-engine.js';
+import { routeRegistry } from './custom-route-registry.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -604,6 +607,24 @@ app.post('/api/svg/:drawId/bootstrap/write-custom-route', async (req: Request, r
   }
 });
 
+// --- Bootstrap: Write Custom Macro ---
+
+app.post('/api/svg/:drawId/bootstrap/write-macro', async (req: Request, res: Response) => {
+  const { name, definition } = req.body as { name?: string; definition?: any };
+  if (!name || !definition) { res.status(400).json({ error: 'Missing name or definition' }); return; }
+  const nameCheck = validateName(name);
+  if (!nameCheck.ok) { res.status(400).json({ error: nameCheck.error }); return; }
+  const defCheck = validateMacroDefinition(name, definition);
+  if (!defCheck.ok) { res.status(400).json({ error: defCheck.error }); return; }
+  try {
+    await writeCustomMacro(name, definition);
+    res.json({ ok: true, path: `data/bootstrap/custom-macros/${name}.json` });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `Failed to write macro: ${msg}` });
+  }
+});
+
 // --- Bootstrap: Rollback ---
 
 // Map short MCP type names to internal asset type names
@@ -612,6 +633,7 @@ const ASSET_TYPE_MAP: Record<string, string> = {
   'style': 'custom-style',
   'tool': 'custom-tool',
   'route': 'custom-route',
+  'macro': 'custom-macro',
   'prompt': 'prompt-extension',
   'skill': 'skill',
   // Also accept the full internal names directly
@@ -619,6 +641,7 @@ const ASSET_TYPE_MAP: Record<string, string> = {
   'custom-style': 'custom-style',
   'custom-tool': 'custom-tool',
   'custom-route': 'custom-route',
+  'custom-macro': 'custom-macro',
   'prompt-extension': 'prompt-extension',
 };
 
@@ -629,7 +652,7 @@ app.post('/api/svg/:drawId/bootstrap/rollback', async (req: Request, res: Respon
   if (!check.ok) { res.status(400).json({ error: check.error }); return; }
   try {
     const ok = await rollbackAsset(
-      type as 'custom-filter' | 'custom-style' | 'custom-tool' | 'custom-route' | 'prompt-extension' | 'skill',
+      type as 'custom-filter' | 'custom-style' | 'custom-tool' | 'custom-route' | 'custom-macro' | 'prompt-extension' | 'skill',
       name!,
       version!,
     );
@@ -651,7 +674,7 @@ app.post('/api/svg/:drawId/bootstrap/history', async (req: Request, res: Respons
   if (!nameCheck.ok) { res.status(400).json({ error: nameCheck.error }); return; }
   try {
     const history = await getAssetHistory(
-      type as 'custom-filter' | 'custom-style' | 'custom-tool' | 'custom-route' | 'prompt-extension' | 'skill',
+      type as 'custom-filter' | 'custom-style' | 'custom-tool' | 'custom-route' | 'custom-macro' | 'prompt-extension' | 'skill',
       name,
     );
     res.json({ ok: true, versions: history });
@@ -664,43 +687,23 @@ app.post('/api/svg/:drawId/bootstrap/history', async (req: Request, res: Respons
 // --- Custom Tool Execution ---
 
 app.post('/api/svg/:drawId/custom-tool/:toolName', async (req: Request, res: Response) => {
-  const drawId = req.params.drawId as string;
-  const toolName = req.params.toolName as string;
-  const tool = await loadCustomTool(toolName);
-  if (!tool) { res.status(404).json({ error: `Custom tool not found: ${toolName}` }); return; }
-  try {
-    const result = await executePipeline(tool.handler.steps, {
-      drawId,
-      vars: {},
-      prev: undefined,
-      input: req.body as Record<string, unknown>,
-    }, pipelineDeps);
-    res.json({ ok: true, result });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: `Custom tool execution failed: ${msg}` });
+  const handler = routeRegistry.getToolHandler(req.params.toolName as string);
+  if (!handler) {
+    res.status(404).json({ error: `Custom tool not found: ${req.params.toolName}` });
+    return;
   }
+  await handler(req, res);
 });
 
 // --- Custom Route Execution ---
 
 app.post('/api/svg/:drawId/custom/:routeName', async (req: Request, res: Response) => {
-  const drawId = req.params.drawId as string;
-  const routeName = req.params.routeName as string;
-  const route = await loadCustomRoute(routeName);
-  if (!route) { res.status(404).json({ error: `Custom route not found: ${routeName}` }); return; }
-  try {
-    const result = await executePipeline(route.handler.steps, {
-      drawId,
-      vars: {},
-      prev: undefined,
-      input: req.body as Record<string, unknown>,
-    }, pipelineDeps);
-    res.json({ ok: true, result });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: `Custom route execution failed: ${msg}` });
+  const handler = routeRegistry.getRouteHandler(req.params.routeName as string);
+  if (!handler) {
+    res.status(404).json({ error: `Custom route not found: ${req.params.routeName}` });
+    return;
   }
+  await handler(req, res);
 });
 
 // --- Bootstrap: Custom Tool Definition (for MCP server) ---
@@ -710,6 +713,37 @@ app.post('/api/svg/:drawId/bootstrap/custom-tool-def/:toolName', async (req: Req
   const tool = await loadCustomTool(toolName);
   if (!tool) { res.status(404).json({ error: `Custom tool not found: ${toolName}` }); return; }
   res.json(tool);
+});
+
+// --- Bootstrap: Macro Definition (for MCP server) ---
+
+app.post('/api/svg/:drawId/bootstrap/macro-def/:macroName', async (req: Request, res: Response) => {
+  const macroName = req.params.macroName as string;
+  const macro = await loadCustomMacro(macroName);
+  if (!macro) { res.status(404).json({ error: `Macro not found: ${macroName}` }); return; }
+  res.json(macro);
+});
+
+// --- Macro Execution ---
+
+app.post('/api/svg/:drawId/macro/:macroName', async (req: Request, res: Response) => {
+  const drawId = req.params.drawId as string;
+  const macroName = req.params.macroName as string;
+  const macro = await loadCustomMacro(macroName);
+  if (!macro) { res.status(404).json({ error: `Macro not found: ${macroName}` }); return; }
+  try {
+    const ctx: PipelineContext = {
+      drawId,
+      vars: {},
+      prev: undefined,
+      input: req.body as Record<string, unknown>,
+    };
+    const result = await executePipeline(macro.macro.steps as any, ctx, pipelineDeps);
+    res.json({ ok: true, result });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `Macro execution failed: ${msg}` });
+  }
 });
 
 // --- SVG direct update endpoint (used by tests and internal tools) ---
@@ -770,6 +804,9 @@ process.on('SIGINT', () => {
   sessionManager.destroyAll();
   process.exit(0);
 });
+
+// Load custom routes/tools/macros into registry
+await routeRegistry.reloadAll(pipelineDeps);
 
 server.listen(PORT, () => {
   console.log(`SVG Artist server listening on http://localhost:${PORT}`);

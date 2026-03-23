@@ -541,6 +541,86 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
+// Scratch Canvas Tools (7)
+// ---------------------------------------------------------------------------
+
+server.tool(
+  'create_scratch_canvas',
+  'Create an isolated temporary SVG canvas for detail work. Returns a canvasId to use with other scratch_* tools. The canvas lives in memory and is deleted after merge or after 30 minutes.',
+  {
+    viewBox: z.string().describe('SVG viewBox for the scratch canvas (e.g. "0 0 120 80")'),
+    background: z.string().optional().describe('Optional background color (e.g. "#ffffff"). Default: transparent'),
+  },
+  async (params) => textTool('scratch/create', params),
+);
+
+server.tool(
+  'scratch_add_layer',
+  'Add a layer to a scratch canvas. Same as add_layer but on the temporary canvas.',
+  {
+    canvasId: z.string().describe('The scratch canvas ID from create_scratch_canvas'),
+    name: z.string().describe('Name for the new layer'),
+    content: z.string().describe('SVG content for the layer'),
+    parent_id: z.string().optional().describe('Parent layer id to nest under'),
+    position: z.number().optional().describe('Insert position among siblings (0-based)'),
+  },
+  async ({ canvasId, ...rest }) => textTool(`scratch/${canvasId}/layers/add`, rest),
+);
+
+server.tool(
+  'scratch_update_layer',
+  'Update a layer on a scratch canvas. Same as update_layer but on the temporary canvas.',
+  {
+    canvasId: z.string().describe('The scratch canvas ID'),
+    layer_id: z.string().describe('The layer id to update'),
+    content: z.string().describe('New SVG content for the layer'),
+  },
+  async ({ canvasId, ...rest }) => textTool(`scratch/${canvasId}/layers/update`, rest),
+);
+
+server.tool(
+  'scratch_list_layers',
+  'List all layers on a scratch canvas.',
+  {
+    canvasId: z.string().describe('The scratch canvas ID'),
+  },
+  async ({ canvasId }) => textTool(`scratch/${canvasId}/layers/list`),
+);
+
+server.tool(
+  'scratch_preview',
+  'Render a scratch canvas as PNG for visual self-review.',
+  {
+    canvasId: z.string().describe('The scratch canvas ID'),
+    width: z.number().optional().describe('Output image width in pixels (default 400)'),
+  },
+  async ({ canvasId, ...rest }) => imageTool(`scratch/${canvasId}/preview`, rest),
+);
+
+server.tool(
+  'merge_scratch_canvas',
+  'Merge a completed scratch canvas into the main drawing as a single layer. Transfers defs (gradients, filters) automatically. Deletes the scratch canvas after merge.',
+  {
+    canvasId: z.string().describe('The scratch canvas ID to merge'),
+    layerName: z.string().describe('Name for the merged layer in the main drawing'),
+    transform: z.object({
+      translate: z.tuple([z.number(), z.number()]).optional().describe('Position [x, y] on main canvas'),
+      scale: z.number().optional().describe('Scale factor'),
+      rotate: z.number().optional().describe('Rotation angle in degrees'),
+    }).optional().describe('Transform to position the merged content on the main canvas'),
+    transferDefs: z.boolean().optional().describe('Transfer gradients/filters from scratch to main (default true)'),
+  },
+  async ({ canvasId, ...rest }) => textTool(`scratch/${canvasId}/merge`, rest),
+);
+
+server.tool(
+  'list_scratch_canvases',
+  'List all active scratch canvases for this drawing. Use to check for orphaned canvases.',
+  {},
+  async () => textTool('scratch/list'),
+);
+
+// ---------------------------------------------------------------------------
 // Dynamic custom tool registration (loaded at startup)
 // ---------------------------------------------------------------------------
 

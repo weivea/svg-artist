@@ -375,6 +375,35 @@ export function getRegisteredActions(): string[] {
   return Object.keys(ACTION_REGISTRY);
 }
 
+/**
+ * Register a macro as a new action in the registry.
+ * The macro's steps are executed as a sub-pipeline with the params as input.
+ */
+export function registerMacroAction(name: string, steps: PipelineStep[]): void {
+  const actionName = `macro_${name}`;
+  ACTION_REGISTRY[actionName] = async (params, ctx, deps) => {
+    // Create a sub-context: macro params become the input
+    const subCtx: PipelineContext = {
+      drawId: ctx.drawId,
+      vars: {},
+      prev: undefined,
+      input: params,
+    };
+    return executePipeline(steps, subCtx, deps);
+  };
+}
+
+/**
+ * Unregister all macro actions (called before reload).
+ */
+export function clearMacroActions(): void {
+  for (const key of Object.keys(ACTION_REGISTRY)) {
+    if (key.startsWith('macro_')) {
+      delete ACTION_REGISTRY[key];
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Pipeline executor
 // ---------------------------------------------------------------------------

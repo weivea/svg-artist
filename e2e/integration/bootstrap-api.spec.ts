@@ -332,4 +332,111 @@ test.describe('Bootstrap API', () => {
     expect(body.custom_routes).toBeInstanceOf(Array);
     expect(body.custom_tools).toContain('list-test-tool');
   });
+
+  // --- Phase 3: Custom macros ---
+
+  test('write-macro creates and macro executes via pipeline', async ({ apiContext }) => {
+    const drawId = await createDrawing(apiContext);
+    await apiContext.post(`/api/svg/${drawId}`, {
+      data: { svg: '<svg viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg"><defs></defs><g id="layer-test" data-name="test"><circle cx="100" cy="100" r="50" fill="red"/></g></svg>' },
+    });
+
+    // Write macro
+    const writeRes = await apiContext.post(`/api/svg/${drawId}/bootstrap/write-macro`, {
+      data: {
+        name: 'get-info-macro',
+        definition: {
+          description: 'Get canvas info via macro',
+          input_schema: {},
+          macro: {
+            steps: [{ action: 'get_canvas_info' }],
+          },
+        },
+      },
+    });
+    expect(writeRes.ok()).toBeTruthy();
+
+    // Execute macro
+    const execRes = await apiContext.post(`/api/svg/${drawId}/macro/get-info-macro`, { data: {} });
+    expect(execRes.ok()).toBeTruthy();
+    const body = await execRes.json();
+    expect(body.ok).toBe(true);
+    expect(body.result).toBeDefined();
+  });
+
+  test('write-macro rejects self-referencing macro', async ({ apiContext }) => {
+    const drawId = await createDrawing(apiContext);
+    // macro_recursive-macro is not a registered action, so the pipeline
+    // handler validator rejects it as "unknown action" before the
+    // self-reference check runs. Either way the write is rejected with 400.
+    const res = await apiContext.post(`/api/svg/${drawId}/bootstrap/write-macro`, {
+      data: {
+        name: 'recursive-macro',
+        definition: {
+          description: 'Bad recursive macro',
+          input_schema: {},
+          macro: {
+            steps: [{ action: 'macro_recursive-macro' }],
+          },
+        },
+      },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json();
+    // Rejected either as unknown action or self-reference
+    expect(body.error).toMatch(/unknown action|cannot reference itself/);
+  });
+
+  test('list returns custom_macros', async ({ apiContext }) => {
+    const drawId = await createDrawing(apiContext);
+    await apiContext.post(`/api/svg/${drawId}/bootstrap/write-macro`, {
+      data: {
+        name: 'list-test-macro',
+        definition: {
+          description: 'Test',
+          input_schema: {},
+          macro: { steps: [{ action: 'get_canvas_info' }] },
+        },
+      },
+    });
+    const res = await apiContext.post(`/api/svg/${drawId}/bootstrap/list`);
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect(body.custom_macros).toBeInstanceOf(Array);
+    expect(body.custom_macros).toContain('list-test-macro');
+  });
+
+  test('macro versioning and history work', async ({ apiContext }) => {
+    const drawId = await createDrawing(apiContext);
+    // Write v1
+    await apiContext.post(`/api/svg/${drawId}/bootstrap/write-macro`, {
+      data: {
+        name: 'versioned-macro',
+        definition: {
+          description: 'V1',
+          input_schema: {},
+          macro: { steps: [{ action: 'get_canvas_info' }] },
+        },
+      },
+    });
+    // Write v2
+    await apiContext.post(`/api/svg/${drawId}/bootstrap/write-macro`, {
+      data: {
+        name: 'versioned-macro',
+        definition: {
+          description: 'V2',
+          input_schema: {},
+          macro: { steps: [{ action: 'get_layers' }] },
+        },
+      },
+    });
+    // Check history
+    const historyRes = await apiContext.post(`/api/svg/${drawId}/bootstrap/history`, {
+      data: { type: 'macro', name: 'versioned-macro' },
+    });
+    expect(historyRes.ok()).toBeTruthy();
+    const body = await historyRes.json();
+    expect(body.versions.length).toBe(1);
+    expect(body.versions[0].version).toBe(1);
+  });
 });

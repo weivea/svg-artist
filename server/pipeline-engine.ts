@@ -47,10 +47,15 @@ type ActionFn = (
 
 /**
  * Resolve `{{$prev}}`, `{{$item}}`, `{{$index}}`, `{{$input.key}}`, `{{$vars.key}}` in a string.
+ * Also resolves `{{param}}` (without $) as a direct reference to `ctx.input[param]`.
  */
 export function resolveTemplate(value: string, ctx: PipelineContext, item?: unknown, index?: number): string {
-  return value.replace(/\{\{\$(\w+(?:\.\w+)*)\}\}/g, (_match, path: string) => {
-    return String(resolveVariable(path, ctx, item, index));
+  return value.replace(/\{\{(\$?)(\w+(?:\.\w+)*)\}\}/g, (_match, prefix: string, path: string) => {
+    if (prefix === '$') {
+      return String(resolveVariable(path, ctx, item, index));
+    }
+    // No $ prefix → direct input parameter reference
+    return String(ctx.input[path] ?? '');
   });
 }
 
@@ -330,6 +335,13 @@ const ACTION_REGISTRY: Record<string, ActionFn> = {
   'apply_style_preset': applyStylePreset,
   'get_element_bbox': getElementBBox,
   'preview_as_png': previewAsPng,
+  // Spec aliases — accept both spec names and original names
+  'get_layers': listLayers,
+  'set_opacity': setLayerOpacity,
+  'style_layer': setLayerStyle,
+  'apply_style': applyStylePreset,
+  'compute_bbox': getElementBBox,
+  'preview_png': previewAsPng,
 };
 
 /**

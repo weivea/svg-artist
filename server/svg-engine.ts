@@ -573,6 +573,101 @@ export class SvgEngine {
     return { ok: true, affectedLayers: affected, filters: filters, description };
   }
 
+  /**
+   * Merge layers and defs from a scratch canvas into this SVG.
+   * Returns the new layer ID and count of transferred defs.
+   */
+  mergeScratchCanvas(
+    scratchEngine: SvgEngine,
+    layerName: string,
+    transform?: { translate?: [number, number]; scale?: number; rotate?: number },
+    transferDefs = true,
+  ): { layerId: string; defsTransferred: number } {
+    const slug = this._slugify(layerName);
+    const layerId = `layer-${slug}-${Date.now().toString(36)}`;
+
+    // Build transform string
+    const parts: string[] = [];
+    if (transform?.translate) parts.push(`translate(${transform.translate[0]}, ${transform.translate[1]})`);
+    if (transform?.scale !== undefined) parts.push(`scale(${transform.scale})`);
+    if (transform?.rotate !== undefined) parts.push(`rotate(${transform.rotate})`);
+
+    // Create wrapper group
+    const g = this.document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('id', layerId);
+    g.setAttribute('data-name', layerName);
+    if (parts.length > 0) {
+      g.setAttribute('transform', parts.join(' '));
+    }
+
+    // Copy scratch layers' content into wrapper group
+    // We serialize scratch layer content and set it as innerHTML of our wrapper
+    const scratchLayers = scratchEngine.listLayers();
+    let innerContent = '';
+    for (const layer of scratchLayers) {
+      const scratchSvg = scratchEngine.serialize();
+      // Extract the full <g> element for this layer — use nested tag counting for correctness
+      const openTagRegex = new RegExp(`<g[^>]*id="${layer.id}"[^>]*>`);
+      const openMatch = scratchSvg.match(openTagRegex);
+      if (openMatch && openMatch.index !== undefined) {
+        let depth = 1;
+        let pos = openMatch.index + openMatch[0].length;
+        while (depth > 0 && pos < scratchSvg.length) {
+          const nextOpen = scratchSvg.indexOf('<g', pos);
+          const nextClose = scratchSvg.indexOf('</g>', pos);
+          if (nextClose === -1) break;
+          if (nextOpen !== -1 && nextOpen < nextClose) {
+            depth++;
+            pos = nextOpen + 2;
+          } else {
+            depth--;
+            if (depth === 0) {
+              pos = nextClose + 5;
+              break;
+            }
+            pos = nextClose + 4;
+          }
+        }
+        innerContent += scratchSvg.slice(openMatch.index, pos);
+      }
+    }
+    g.innerHTML = innerContent;
+
+    // Transfer defs
+    let defsTransferred = 0;
+    if (transferDefs) {
+      const scratchDefs = scratchEngine.listDefs();
+      for (const def of scratchDefs) {
+        if (!def.id) continue;
+        const scratchSvg = scratchEngine.serialize();
+        // Extract def element using nested tag counting (same technique as renderLayerToPng)
+        const defOpenRegex = new RegExp(`<${def.type}[^>]*id="${def.id}"[^>]*/?>`);
+        const defOpenMatch = scratchSvg.match(defOpenRegex);
+        if (defOpenMatch && defOpenMatch.index !== undefined) {
+          let defContent: string;
+          // Check if it's self-closing
+          if (defOpenMatch[0].endsWith('/>')) {
+            defContent = defOpenMatch[0];
+          } else {
+            // Find matching closing tag
+            const closeTag = `</${def.type}>`;
+            const closeIdx = scratchSvg.indexOf(closeTag, defOpenMatch.index);
+            if (closeIdx !== -1) {
+              defContent = scratchSvg.slice(defOpenMatch.index, closeIdx + closeTag.length);
+            } else {
+              continue;
+            }
+          }
+          this.manageDefs('add', def.id, defContent);
+          defsTransferred++;
+        }
+      }
+    }
+
+    this.svgElement.appendChild(g);
+    return { layerId, defsTransferred };
+  }
+
   private _elementBBox(el: LElement): BBox | null {
     const tag = el.tagName.toLowerCase();
     if (tag === 'rect') {

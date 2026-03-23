@@ -747,6 +747,46 @@ app.post('/api/svg/:drawId/scratch/:canvasId/preview', async (req: Request, res:
   }
 });
 
+app.post('/api/svg/:drawId/scratch/:canvasId/defs/manage', async (req: Request, res: Response) => {
+  const { action, id, content } = req.body as { action?: string; id?: string; content?: string };
+  if (!action || !id) { res.status(400).json({ error: 'Missing action or id' }); return; }
+  const engine = scratchStore.get(req.params.canvasId as string);
+  if (!engine) { res.status(404).json({ error: 'Scratch canvas not found' }); return; }
+  const ok = engine.manageDefs(action as 'add' | 'update' | 'delete', id, content);
+  if (!ok) { res.status(400).json({ error: 'Defs operation failed' }); return; }
+  res.json({ ok: true });
+});
+
+app.post('/api/svg/:drawId/scratch/:canvasId/merge', async (req: Request, res: Response) => {
+  const { layerName, transform, transferDefs } = req.body as {
+    layerName?: string;
+    transform?: { translate?: [number, number]; scale?: number; rotate?: number };
+    transferDefs?: boolean;
+  };
+  if (!layerName) { res.status(400).json({ error: 'Missing layerName' }); return; }
+
+  const drawId = req.params.drawId as string;
+  const canvasId = req.params.canvasId as string;
+
+  const scratchEngine = scratchStore.get(canvasId);
+  if (!scratchEngine) { res.status(404).json({ error: 'Scratch canvas not found' }); return; }
+
+  const drawing = await drawingStore.get(drawId);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+
+  const mainEngine = new SvgEngine(drawing.svgContent);
+  const result = mainEngine.mergeScratchCanvas(scratchEngine, layerName, transform, transferDefs !== false);
+
+  const svg = mainEngine.serialize();
+  await drawingStore.updateSvg(drawId, svg);
+  broadcastSvg(drawId, svg);
+
+  // Delete scratch canvas after successful merge
+  scratchStore.delete(canvasId);
+
+  res.json({ ok: true, layer_id: result.layerId, defs_transferred: result.defsTransferred });
+});
+
 // --- Custom Tool Execution ---
 
 app.post('/api/svg/:drawId/custom-tool/:toolName', async (req: Request, res: Response) => {

@@ -146,4 +146,90 @@ test.describe('Scratch Canvas API', () => {
     const body = await res.json();
     expect(body.canvases).toHaveLength(0);
   });
+
+  test('merge scratch canvas into main drawing', async ({ apiContext }) => {
+    const drawId = await createDrawing(apiContext);
+    const createRes = await apiContext.post(`/api/svg/${drawId}/scratch/create`, {
+      data: { viewBox: '0 0 120 80' },
+    });
+    const { canvasId } = await createRes.json();
+
+    // Add layers to scratch
+    await apiContext.post(`/api/svg/${drawId}/scratch/${canvasId}/layers/add`, {
+      data: { name: 'iris', content: '<circle cx="60" cy="40" r="20" fill="blue"/>' },
+    });
+    await apiContext.post(`/api/svg/${drawId}/scratch/${canvasId}/layers/add`, {
+      data: { name: 'pupil', content: '<circle cx="60" cy="40" r="8" fill="black"/>' },
+    });
+
+    // Merge into main drawing
+    const res = await apiContext.post(`/api/svg/${drawId}/scratch/${canvasId}/merge`, {
+      data: {
+        layerName: 'left-eye',
+        transform: { translate: [100, 150], scale: 0.8 },
+      },
+    });
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.layer_id).toMatch(/^layer-left-eye-/);
+
+    // Verify the layer exists in main drawing
+    const layersRes = await apiContext.post(`/api/svg/${drawId}/layers/list`);
+    const layersBody = await layersRes.json();
+    const merged = layersBody.layers.find((l: any) => l.id === body.layer_id);
+    expect(merged).toBeTruthy();
+    expect(merged.name).toBe('left-eye');
+
+    // Verify scratch canvas is deleted after merge
+    const listRes = await apiContext.post(`/api/svg/${drawId}/scratch/list`);
+    const listBody = await listRes.json();
+    expect(listBody.canvases).toHaveLength(0);
+  });
+
+  test('merge scratch canvas transfers defs', async ({ apiContext }) => {
+    const drawId = await createDrawing(apiContext);
+    const createRes = await apiContext.post(`/api/svg/${drawId}/scratch/create`, {
+      data: { viewBox: '0 0 120 80' },
+    });
+    const { canvasId } = await createRes.json();
+
+    await apiContext.post(`/api/svg/${drawId}/scratch/${canvasId}/layers/add`, {
+      data: {
+        name: 'gradient-circle',
+        content: '<circle cx="60" cy="40" r="20" fill="url(#scratch-grad)"/>',
+      },
+    });
+
+    // Add a def to the scratch canvas
+    await apiContext.post(`/api/svg/${drawId}/scratch/${canvasId}/defs/manage`, {
+      data: {
+        action: 'add',
+        id: 'scratch-grad',
+        content: '<linearGradient id="scratch-grad"><stop offset="0%" stop-color="blue"/><stop offset="100%" stop-color="green"/></linearGradient>',
+      },
+    });
+
+    // Merge
+    const res = await apiContext.post(`/api/svg/${drawId}/scratch/${canvasId}/merge`, {
+      data: { layerName: 'eye-with-gradient', transferDefs: true },
+    });
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect(body.defs_transferred).toBeGreaterThanOrEqual(1);
+
+    // Check main drawing has the gradient
+    const defsRes = await apiContext.post(`/api/svg/${drawId}/defs/list`);
+    const defsBody = await defsRes.json();
+    const transferred = defsBody.defs.find((d: any) => d.id.includes('scratch-grad'));
+    expect(transferred).toBeTruthy();
+  });
+
+  test('merge fails for nonexistent scratch canvas', async ({ apiContext }) => {
+    const drawId = await createDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/scratch/nonexistent/merge`, {
+      data: { layerName: 'test' },
+    });
+    expect(res.status()).toBe(404);
+  });
 });

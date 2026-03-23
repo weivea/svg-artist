@@ -331,6 +331,80 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
+// Bootstrap / Self-improvement Tools (6)
+// ---------------------------------------------------------------------------
+
+server.tool(
+  'write_skill',
+  'Create or update a drawing skill (SKILL.md file). Requires reload_session to take effect.',
+  {
+    name: z.string().describe('Skill name in kebab-case (e.g. "advanced-shading")'),
+    content: z.string().describe('Full SKILL.md content with frontmatter and instructions'),
+  },
+  async (params) => textTool('bootstrap/write-skill', params),
+);
+
+server.tool(
+  'write_filter',
+  'Create or update a custom SVG filter template (JSON). Requires reload_session to take effect. Use {{id}} for filter id and {{param:default}} for parameters in svg_template.',
+  {
+    name: z.string().describe('Filter name in kebab-case (e.g. "oil-paint")'),
+    definition: z.object({
+      description: z.string().describe('What this filter does'),
+      svg_template: z.string().describe('SVG filter template with {{id}} and {{param:default}} placeholders'),
+      params_schema: z.record(z.string(), z.object({
+        type: z.enum(['number', 'string']),
+        default: z.union([z.number(), z.string()]),
+        min: z.number().optional(),
+        max: z.number().optional(),
+      })).optional().describe('Parameter definitions with types and ranges'),
+    }),
+  },
+  async (params) => textTool('bootstrap/write-filter', params),
+);
+
+server.tool(
+  'write_style',
+  'Create or update a custom style preset (JSON). Requires reload_session to take effect.',
+  {
+    name: z.string().describe('Style name in kebab-case (e.g. "pixel-art")'),
+    definition: z.object({
+      description: z.string().describe('What this style achieves'),
+      layer_styles: z.record(z.string(), z.record(z.string(), z.string())).describe(
+        'Map of layer name pattern to CSS-like style attributes (e.g. {"*": {"fill": "#000"}})',
+      ),
+    }),
+  },
+  async (params) => textTool('bootstrap/write-style', params),
+);
+
+server.tool(
+  'write_prompt_extension',
+  'Add or update a system prompt extension. Appended to your context after reload_session.',
+  {
+    name: z.string().describe('Extension name in kebab-case (e.g. "shading-tips")'),
+    content: z.string().describe('Markdown content to add to system prompt'),
+  },
+  async (params) => textTool('bootstrap/write-prompt-extension', params),
+);
+
+server.tool(
+  'reload_session',
+  'Reload the Claude CLI to apply all changes (new skills, filters, styles, prompt extensions). Automatically kills this process, restarts with --resume, and continues the current task. No user action required.',
+  {
+    reason: z.string().describe('Summary of what was changed and why (shown in continuation prompt)'),
+  },
+  async (params) => textTool('bootstrap/reload', params),
+);
+
+server.tool(
+  'list_bootstrap_assets',
+  'List all available skills, custom filters, custom styles, and prompt extensions',
+  {},
+  async () => textTool('bootstrap/list'),
+);
+
+// ---------------------------------------------------------------------------
 // Start server
 // ---------------------------------------------------------------------------
 

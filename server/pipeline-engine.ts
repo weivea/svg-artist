@@ -10,7 +10,7 @@ import { renderSvgToPng, renderLayerToPng } from './png-renderer.js';
 
 export interface PipelineStep {
   action: string;
-  params: Record<string, unknown>;
+  params?: Record<string, unknown>;
   store_as?: string;
   for_each?: string;
 }
@@ -46,10 +46,27 @@ type ActionFn = (
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve `{{$prev}}`, `{{$item}}`, `{{$index}}`, `{{$input.key}}`, `{{$vars.key}}` in a string.
- * Also resolves `{{param}}` (without $) as a direct reference to `ctx.input[param]`.
+ * Resolve template placeholders in a string value.
+ * - `{{$prev}}`, `{{$item}}`, `{{$index}}` — special variables
+ * - `{{$input.key}}`, `{{$vars.key}}` — namespaced lookups
+ * - `{{$var_name}}` — stored variable (falls back to ctx.vars)
+ * - `{{param}}` (no $) — direct input parameter reference
+ *
+ * When the entire string is a single placeholder (e.g. `"{{filter_params}}"`),
+ * the raw value is returned without String coercion, preserving objects/arrays.
  */
-export function resolveTemplate(value: string, ctx: PipelineContext, item?: unknown, index?: number): string {
+export function resolveTemplate(value: string, ctx: PipelineContext, item?: unknown, index?: number): unknown {
+  // Whole-value optimization: if entire string is one placeholder, return raw value
+  const wholeMatch = value.match(/^\{\{(\$?)(\w+(?:\.\w+)*)\}\}$/);
+  if (wholeMatch) {
+    const [, prefix, path] = wholeMatch;
+    if (prefix === '$') {
+      return resolveVariable(path, ctx, item, index);
+    }
+    return ctx.input[path] ?? '';
+  }
+
+  // Multiple or partial placeholders: string interpolation with String() coercion
   return value.replace(/\{\{(\$?)(\w+(?:\.\w+)*)\}\}/g, (_match, prefix: string, path: string) => {
     if (prefix === '$') {
       return String(resolveVariable(path, ctx, item, index));
@@ -71,18 +88,25 @@ export function resolveVariable(path: string, ctx: PipelineContext, item?: unkno
     const key = path.slice('vars.'.length);
     return ctx.vars[key] ?? '';
   }
+  // Fallback: check stored variables by bare name (e.g. {{$all_layers}})
+  if (path in ctx.vars) {
+    return ctx.vars[path];
+  }
   return '';
 }
 
 /**
  * Recursively resolve templates in params object.
+ * Handles the case where resolveTemplate returns a raw value (object/array)
+ * when the entire string is a single placeholder.
  */
 export function resolveParams(
-  params: Record<string, unknown>,
+  params: Record<string, unknown> | undefined,
   ctx: PipelineContext,
   item?: unknown,
   index?: number,
 ): Record<string, unknown> {
+  if (!params) return {};
   const resolved: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(params)) {
     if (typeof value === 'string') {
@@ -369,8 +393,8 @@ export async function executePipeline(
     }
 
     if (step.for_each) {
-      // Resolve the iterable
-      const iterableRaw = resolveVariable(step.for_each, ctx);
+      // Resolve the iterable — for_each can be a template like "{{layer_ids}}" or "{{$all_layers}}"
+      const iterableRaw = resolveTemplate(step.for_each, ctx);
       const iterable = Array.isArray(iterableRaw) ? iterableRaw : [];
       const results: unknown[] = [];
 

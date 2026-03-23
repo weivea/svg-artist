@@ -6,7 +6,7 @@ const MAX_SKILL_SIZE = 50 * 1024;   // 50KB
 const MAX_PROMPT_SIZE = 10 * 1024;   // 10KB
 
 const VALID_ASSET_TYPES = [
-  'custom-filter', 'custom-style', 'custom-tool', 'custom-route', 'prompt-extension', 'skill',
+  'custom-filter', 'custom-style', 'custom-tool', 'custom-route', 'custom-macro', 'prompt-extension', 'skill',
 ] as const;
 
 export interface ValidationResult {
@@ -191,6 +191,44 @@ export function validateCustomRouteDefinition(definition: {
     return { ok: false, error: 'Route definition must have a handler' };
   }
   return validatePipelineHandler(definition.handler);
+}
+
+// --- Custom Macro Definition Validation ---
+
+export function validateMacroDefinition(
+  name: string,
+  definition: {
+    description?: string;
+    input_schema?: unknown;
+    macro?: { steps?: Array<{ action?: string; params?: unknown }> };
+  },
+): ValidationResult {
+  if (!definition || typeof definition !== 'object') {
+    return { ok: false, error: 'Macro definition must be an object' };
+  }
+  if (!definition.description || typeof definition.description !== 'string') {
+    return { ok: false, error: 'Macro definition must have a description string' };
+  }
+  if (!definition.input_schema || typeof definition.input_schema !== 'object') {
+    return { ok: false, error: 'Macro definition must have an input_schema object' };
+  }
+  if (!definition.macro || typeof definition.macro !== 'object') {
+    return { ok: false, error: 'Macro definition must have a macro object' };
+  }
+  // Validate steps using existing pipeline handler validator
+  const handlerCheck = validatePipelineHandler({
+    type: 'pipeline',
+    steps: definition.macro.steps,
+  });
+  if (!handlerCheck.ok) return handlerCheck;
+  // Check for self-reference: macro_<name> must not appear in its own steps
+  const selfAction = `macro_${name}`;
+  for (let i = 0; i < (definition.macro.steps?.length ?? 0); i++) {
+    if (definition.macro.steps![i].action === selfAction) {
+      return { ok: false, error: `Step ${i}: macro cannot reference itself (${selfAction})` };
+    }
+  }
+  return { ok: true };
 }
 
 // --- Rollback Validation ---

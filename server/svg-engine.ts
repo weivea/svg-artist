@@ -295,8 +295,29 @@ export class SvgEngine {
   setLayerStyle(layerId: string, styles: Record<string, string | number>): boolean {
     const g = this._findLayerElement(layerId);
     if (!g) return false;
+
+    // Special attribute mappings
+    const specialMappings: Record<string, string> = {
+      filter_ref: 'filter',
+      mask_ref: 'mask',
+      clip_path: 'clip-path',
+    };
+
     for (const [key, value] of Object.entries(styles)) {
-      const attrName = key.replace(/_/g, '-'); // stroke_width → stroke-width
+      if (key === 'layer_id') continue; // skip the id param
+
+      if (key === 'mix_blend_mode') {
+        // mix-blend-mode must be set via style attribute
+        const existing = g.getAttribute('style') || '';
+        const cleaned = existing.replace(/mix-blend-mode:\s*[^;]+;?\s*/g, '').trim();
+        const newStyle = cleaned
+          ? `${cleaned}; mix-blend-mode: ${value}`
+          : `mix-blend-mode: ${value}`;
+        g.setAttribute('style', newStyle);
+        continue;
+      }
+
+      const attrName = specialMappings[key] || key.replace(/_/g, '-');
       g.setAttribute(attrName, String(value));
     }
     return true;

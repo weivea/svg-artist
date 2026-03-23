@@ -59,4 +59,79 @@ test.describe('Layer API — Transform & Style', () => {
     expect(svg).toContain('stroke="black"');
     expect(svg).toContain('stroke-width="2"');
   });
+
+  test('set_layer_style sets stroke-dasharray', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/layers/style`, {
+      data: { layer_id: 'layer-bg', stroke: 'black', stroke_width: 2, stroke_dasharray: '5 3' },
+    });
+    expect(res.ok()).toBeTruthy();
+
+    const srcRes = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const svg = (await srcRes.json()).svg;
+    expect(svg).toContain('stroke-dasharray="5 3"');
+  });
+
+  test('set_layer_style sets stroke-linecap and stroke-linejoin', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/layers/style`, {
+      data: { layer_id: 'layer-sun', stroke: '#000', stroke_linecap: 'round', stroke_linejoin: 'bevel' },
+    });
+    expect(res.ok()).toBeTruthy();
+
+    const srcRes = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const svg = (await srcRes.json()).svg;
+    expect(svg).toContain('stroke-linecap="round"');
+    expect(svg).toContain('stroke-linejoin="bevel"');
+  });
+
+  test('set_layer_style sets mix-blend-mode via style attribute', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/layers/style`, {
+      data: { layer_id: 'layer-sun', mix_blend_mode: 'multiply' },
+    });
+    expect(res.ok()).toBeTruthy();
+
+    const srcRes = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const svg = (await srcRes.json()).svg;
+    expect(svg).toContain('mix-blend-mode: multiply');
+  });
+
+  test('set_layer_style sets filter_ref as filter attribute', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/layers/style`, {
+      data: { layer_id: 'layer-sun', filter_ref: 'url(#my-filter)' },
+    });
+    expect(res.ok()).toBeTruthy();
+
+    const srcRes = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const svg = (await srcRes.json()).svg;
+    expect(svg).toContain('filter="url(#my-filter)"');
+  });
+
+  test('set_layer_style sets clip-path and mask', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/layers/style`, {
+      data: { layer_id: 'layer-bg', clip_path: 'url(#clip-1)', mask_ref: 'url(#mask-1)' },
+    });
+    expect(res.ok()).toBeTruthy();
+
+    const srcRes = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const svg = (await srcRes.json()).svg;
+    expect(svg).toContain('clip-path="url(#clip-1)"');
+    expect(svg).toContain('mask="url(#mask-1)"');
+  });
+
+  test('set_layer_style sets fill-opacity and stroke-opacity', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/layers/style`, {
+      data: { layer_id: 'layer-sun', fill_opacity: 0.5, stroke_opacity: 0.8 },
+    });
+    expect(res.ok()).toBeTruthy();
+
+    const srcRes = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const svg = (await srcRes.json()).svg;
+    expect(svg).toContain('fill-opacity="0.5"');
+    expect(svg).toContain('stroke-opacity="0.8"');
+  });
 });

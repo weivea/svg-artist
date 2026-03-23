@@ -693,8 +693,13 @@ app.post('/api/svg/:drawId/scratch/create', async (req: Request, res: Response) 
   const drawId = req.params.drawId as string;
   const drawing = await drawingStore.get(drawId);
   if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
-  const result = scratchStore.create(drawId, viewBox, background);
-  res.json(result);
+  try {
+    const result = scratchStore.create(drawId, viewBox, background);
+    res.json(result);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `Failed to create scratch canvas: ${msg}` });
+  }
 });
 
 // --- Custom Tool Execution ---
@@ -840,10 +845,12 @@ app.get('/{*splat}', (_req: Request, res: Response) => {
 // Graceful shutdown
 process.on('SIGTERM', () => {
   sessionManager.destroyAll();
+  scratchStore.destroy();
   process.exit(0);
 });
 process.on('SIGINT', () => {
   sessionManager.destroyAll();
+  scratchStore.destroy();
   process.exit(0);
 });
 

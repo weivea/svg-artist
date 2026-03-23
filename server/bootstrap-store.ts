@@ -14,6 +14,7 @@ const CUSTOM_STYLES_DIR = join(BOOTSTRAP_DIR, 'custom-styles');
 const PROMPT_EXTENSIONS_DIR = join(BOOTSTRAP_DIR, 'prompt-extensions');
 const CUSTOM_TOOLS_DIR = join(BOOTSTRAP_DIR, 'custom-tools');
 const CUSTOM_ROUTES_DIR = join(BOOTSTRAP_DIR, 'custom-routes');
+const CUSTOM_MACROS_DIR = join(BOOTSTRAP_DIR, 'custom-macros');
 
 const MAX_VERSIONS = 10;
 
@@ -65,6 +66,17 @@ export interface CustomRouteDef {
   version: number;
 }
 
+export interface MacroDef {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+  macro: {
+    steps: PipelineStepDef[];
+  };
+  created_by: string;
+  version: number;
+}
+
 export interface PipelineStepDef {
   action: string;
   params?: Record<string, unknown>;
@@ -85,6 +97,7 @@ export interface BootstrapAssets {
   prompt_extensions: string[];
   custom_tools: string[];
   custom_routes: string[];
+  custom_macros: string[];
 }
 
 async function ensureDir(dir: string): Promise<void> {
@@ -168,7 +181,7 @@ function escapeRegex(s: string): string {
  * Get the history (version list) of an asset.
  */
 export async function getAssetHistory(
-  type: 'custom-filter' | 'custom-style' | 'custom-tool' | 'custom-route' | 'prompt-extension' | 'skill',
+  type: 'custom-filter' | 'custom-style' | 'custom-tool' | 'custom-route' | 'custom-macro' | 'prompt-extension' | 'skill',
   name: string,
 ): Promise<VersionInfo[]> {
   const { dir, ext } = getAssetDirAndExt(type);
@@ -202,7 +215,7 @@ export async function getAssetHistory(
  * Rollback an asset to a specific version.
  */
 export async function rollbackAsset(
-  type: 'custom-filter' | 'custom-style' | 'custom-tool' | 'custom-route' | 'prompt-extension' | 'skill',
+  type: 'custom-filter' | 'custom-style' | 'custom-tool' | 'custom-route' | 'custom-macro' | 'prompt-extension' | 'skill',
   name: string,
   version: number,
 ): Promise<boolean> {
@@ -236,6 +249,7 @@ function getAssetDirAndExt(type: string): { dir: string; ext: string } {
     case 'custom-style': return { dir: CUSTOM_STYLES_DIR, ext: '.json' };
     case 'custom-tool': return { dir: CUSTOM_TOOLS_DIR, ext: '.json' };
     case 'custom-route': return { dir: CUSTOM_ROUTES_DIR, ext: '.json' };
+    case 'custom-macro': return { dir: CUSTOM_MACROS_DIR, ext: '.json' };
     case 'prompt-extension': return { dir: PROMPT_EXTENSIONS_DIR, ext: '.md' };
     case 'skill': return { dir: SKILLS_DIR, ext: '.md' };
     default: return { dir: BOOTSTRAP_DIR, ext: '.json' };
@@ -480,16 +494,74 @@ export async function loadAllCustomRoutes(): Promise<CustomRouteDef[]> {
   return routes;
 }
 
+// --- Custom Macros ---
+
+export async function writeCustomMacro(name: string, definition: {
+  description: string;
+  input_schema: Record<string, unknown>;
+  macro: { steps: PipelineStepDef[] };
+}): Promise<void> {
+  await ensureDir(CUSTOM_MACROS_DIR);
+  const filePath = join(CUSTOM_MACROS_DIR, `${name}.json`);
+  const versionsDir = join(CUSTOM_MACROS_DIR, 'versions', name);
+  await archiveBeforeWrite(filePath, versionsDir);
+  const data: MacroDef = {
+    name,
+    description: definition.description,
+    input_schema: definition.input_schema,
+    macro: definition.macro,
+    created_by: 'claude-bootstrap',
+    version: 1,
+  };
+  // Increment version if file exists
+  try {
+    const existing = JSON.parse(await readFile(filePath, 'utf8')) as MacroDef;
+    data.version = existing.version + 1;
+  } catch { /* new file */ }
+  await writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
+}
+
+export async function loadCustomMacro(name: string): Promise<MacroDef | null> {
+  try {
+    const content = await readFile(join(CUSTOM_MACROS_DIR, `${name}.json`), 'utf8');
+    return JSON.parse(content) as MacroDef;
+  } catch {
+    return null;
+  }
+}
+
+export async function listCustomMacros(): Promise<string[]> {
+  try {
+    const files = await readdir(CUSTOM_MACROS_DIR);
+    return files
+      .filter(f => f.endsWith('.json') && !f.startsWith('.'))
+      .map(f => f.replace('.json', ''));
+  } catch {
+    return [];
+  }
+}
+
+export async function loadAllCustomMacros(): Promise<MacroDef[]> {
+  const names = await listCustomMacros();
+  const macros: MacroDef[] = [];
+  for (const name of names) {
+    const macro = await loadCustomMacro(name);
+    if (macro) macros.push(macro);
+  }
+  return macros;
+}
+
 // --- Aggregate ---
 
 export async function listAllAssets(): Promise<BootstrapAssets> {
-  const [skills, custom_filters, custom_styles, prompt_extensions, custom_tools, custom_routes] = await Promise.all([
+  const [skills, custom_filters, custom_styles, prompt_extensions, custom_tools, custom_routes, custom_macros] = await Promise.all([
     listSkills(),
     listCustomFilters(),
     listCustomStyles(),
     listPromptExtensions(),
     listCustomTools(),
     listCustomRoutes(),
+    listCustomMacros(),
   ]);
-  return { skills, custom_filters, custom_styles, prompt_extensions, custom_tools, custom_routes };
+  return { skills, custom_filters, custom_styles, prompt_extensions, custom_tools, custom_routes, custom_macros };
 }

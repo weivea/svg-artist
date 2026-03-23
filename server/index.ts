@@ -688,22 +688,50 @@ app.post('/api/svg/:drawId/bootstrap/history', async (req: Request, res: Respons
 
 app.post('/api/svg/:drawId/custom-tool/:toolName', async (req: Request, res: Response) => {
   const handler = routeRegistry.getToolHandler(req.params.toolName as string);
-  if (!handler) {
+  if (handler) {
+    await handler(req, res);
+    return;
+  }
+  // Fallback: load from disk (handles newly-written tools before registry reload)
+  const tool = await loadCustomTool(req.params.toolName as string);
+  if (!tool) {
     res.status(404).json({ error: `Custom tool not found: ${req.params.toolName}` });
     return;
   }
-  await handler(req, res);
+  const drawId = req.params.drawId as string;
+  const ctx: PipelineContext = { drawId, vars: {}, prev: undefined, input: req.body as Record<string, unknown> };
+  try {
+    const result = await executePipeline(tool.handler.steps as any, ctx, pipelineDeps);
+    res.json({ ok: true, result });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: msg });
+  }
 });
 
 // --- Custom Route Execution ---
 
 app.post('/api/svg/:drawId/custom/:routeName', async (req: Request, res: Response) => {
   const handler = routeRegistry.getRouteHandler(req.params.routeName as string);
-  if (!handler) {
+  if (handler) {
+    await handler(req, res);
+    return;
+  }
+  // Fallback: load from disk (handles newly-written routes before registry reload)
+  const route = await loadCustomRoute(req.params.routeName as string);
+  if (!route) {
     res.status(404).json({ error: `Custom route not found: ${req.params.routeName}` });
     return;
   }
-  await handler(req, res);
+  const drawId = req.params.drawId as string;
+  const ctx: PipelineContext = { drawId, vars: {}, prev: undefined, input: req.body as Record<string, unknown> };
+  try {
+    const result = await executePipeline(route.handler.steps as any, ctx, pipelineDeps);
+    res.json({ ok: true, result });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: msg });
+  }
 });
 
 // --- Bootstrap: Custom Tool Definition (for MCP server) ---

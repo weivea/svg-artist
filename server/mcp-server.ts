@@ -96,6 +96,13 @@ server.tool(
   async () => textTool('canvas/source'),
 );
 
+server.tool(
+  'get_layer_colors',
+  'Extract all colors used in a layer (fills, strokes, stop-colors). Returns color values with usage context for palette consistency checks.',
+  { layer_id: z.string().describe('The layer id to analyze') },
+  async ({ layer_id }) => textTool('layers/colors', { layer_id }),
+);
+
 // ---------------------------------------------------------------------------
 // Layer Management (7)
 // ---------------------------------------------------------------------------

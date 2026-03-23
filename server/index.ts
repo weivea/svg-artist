@@ -325,6 +325,17 @@ app.post('/api/svg/:drawId/layers/style', async (req: Request, res: Response) =>
   res.json({ ok: true });
 });
 
+app.post('/api/svg/:drawId/layers/colors', async (req: Request, res: Response) => {
+  const { layer_id } = req.body as { layer_id?: string };
+  if (!layer_id) { res.status(400).json({ error: 'Missing layer_id' }); return; }
+  const drawing = await drawingStore.get(req.params.drawId as string);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const engine = new SvgEngine(drawing.svgContent);
+  const colors = engine.getLayerColors(layer_id);
+  if (colors === null) { res.status(404).json({ error: 'Layer not found' }); return; }
+  res.json({ colors });
+});
+
 // --- Defs & ViewBox API ---
 app.post('/api/svg/:drawId/defs/list', async (req: Request, res: Response) => {
   const drawing = await drawingStore.get(req.params.drawId as string);

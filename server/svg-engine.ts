@@ -323,6 +323,54 @@ export class SvgEngine {
     return true;
   }
 
+  /** Extract all colors used in a layer's content */
+  getLayerColors(layerId: string): Array<{ color: string; usage: string; element: string }> | null {
+    const element = this._findLayerElement(layerId);
+    if (!element) return null;
+
+    const colors: Array<{ color: string; usage: string; element: string }> = [];
+    const seen = new Set<string>();
+
+    const colorAttrs = ['fill', 'stroke', 'stop-color', 'flood-color', 'lighting-color'];
+    const allChildren = element.querySelectorAll('*');
+    const elements = [element, ...Array.from(allChildren) as LElement[]];
+
+    for (const el of elements) {
+      const tag = el.tagName?.toLowerCase() || 'unknown';
+      for (const attr of colorAttrs) {
+        const value = el.getAttribute(attr);
+        if (value && value !== 'none' && !value.startsWith('url(')) {
+          const key = `${value}:${attr}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            colors.push({ color: value, usage: attr, element: tag });
+          }
+        }
+      }
+
+      // Also check inline style for color properties
+      const style = el.getAttribute('style') || '';
+      if (style) {
+        for (const attr of colorAttrs) {
+          const regex = new RegExp(`${attr}\\s*:\\s*([^;]+)`);
+          const match = style.match(regex);
+          if (match) {
+            const value = match[1].trim();
+            if (value !== 'none' && !value.startsWith('url(')) {
+              const key = `${value}:${attr}:style`;
+              if (!seen.has(key)) {
+                seen.add(key);
+                colors.push({ color: value, usage: `${attr} (inline)`, element: tag });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return colors;
+  }
+
   /** List all defs (gradients, filters, patterns, clipPaths) */
   listDefs(): Array<{ id: string; type: string }> {
     const defs = this.svgElement.querySelector('defs');

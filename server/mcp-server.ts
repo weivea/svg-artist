@@ -208,12 +208,24 @@ server.tool(
 
 server.tool(
   'set_layer_style',
-  'Set style attributes (fill, stroke, stroke-width, etc.) on a layer',
+  'Set visual style attributes on a layer. Supports fill, stroke, blend modes, filter/clip/mask references, and more.',
   {
     layer_id: z.string().describe('The layer id'),
-    fill: z.string().optional().describe('Fill color or reference'),
-    stroke: z.string().optional().describe('Stroke color'),
+    fill: z.string().optional().describe('Fill color, gradient url(#id), or "none"'),
+    stroke: z.string().optional().describe('Stroke color or "none"'),
     stroke_width: z.number().optional().describe('Stroke width'),
+    stroke_linecap: z.enum(['butt', 'round', 'square']).optional().describe('Line cap shape'),
+    stroke_linejoin: z.enum(['miter', 'round', 'bevel']).optional().describe('Line join shape'),
+    stroke_dasharray: z.string().optional().describe('Dash pattern, e.g. "5 3" or "10 5 2 5"'),
+    stroke_opacity: z.number().optional().describe('Stroke opacity 0-1'),
+    fill_opacity: z.number().optional().describe('Fill opacity 0-1'),
+    mix_blend_mode: z.enum([
+      'normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten',
+      'color-dodge', 'color-burn', 'hard-light', 'soft-light', 'difference', 'exclusion',
+    ]).optional().describe('CSS blend mode for layer compositing'),
+    filter_ref: z.string().optional().describe('Filter reference, e.g. "url(#my-filter)"'),
+    clip_path: z.string().optional().describe('Clip path reference, e.g. "url(#my-clip)"'),
+    mask_ref: z.string().optional().describe('Mask reference, e.g. "url(#my-mask)"'),
   },
   async (params) => textTool('layers/style', params),
 );

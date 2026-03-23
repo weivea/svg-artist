@@ -17,12 +17,19 @@ import type { StylePreset } from './style-presets.js';
 import {
   validateName, validateSkillContent, validateFilterDefinition,
   validateStyleDefinition, validatePromptExtension,
+  validateCustomToolDefinition, validateCustomRouteDefinition,
+  validateRollback,
 } from './bootstrap-validator.js';
 import {
   writeSkill, writeCustomFilter, writeCustomStyle,
   writePromptExtension as storeWritePromptExtension,
   listAllAssets,
+  writeCustomTool, loadCustomTool,
+  writeCustomRoute, loadCustomRoute,
+  getAssetHistory, rollbackAsset,
 } from './bootstrap-store.js';
+import { executePipeline } from './pipeline-engine.js';
+import type { PipelineDeps } from './pipeline-engine.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -38,6 +45,21 @@ app.use(express.static(join(__dirname, '..', 'dist')));
 
 const sessionManager = new SessionManager();
 const drawingStore = new DrawingStore();
+
+// Pipeline execution dependencies (used by custom tools and routes)
+const pipelineDeps: PipelineDeps = {
+  getSvgEngine: async (drawId: string) => {
+    const drawing = await drawingStore.get(drawId);
+    if (!drawing) return null;
+    return new SvgEngine(drawing.svgContent);
+  },
+  saveSvg: async (drawId: string, svg: string) => {
+    await drawingStore.updateSvg(drawId, svg);
+  },
+  broadcastSvg: (drawId: string, svg: string) => {
+    broadcastSvg(drawId, svg);
+  },
+};
 
 // --- WebSocket servers (noServer mode) ---
 const svgWss = new WebSocketServer({ noServer: true });
@@ -544,6 +566,132 @@ app.post('/api/svg/:drawId/bootstrap/list', async (_req: Request, res: Response)
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: `Failed to list assets: ${msg}` });
   }
+});
+
+// --- Bootstrap: Custom Tool CRUD ---
+
+app.post('/api/svg/:drawId/bootstrap/write-custom-tool', async (req: Request, res: Response) => {
+  const { name, definition } = req.body as { name?: string; definition?: any };
+  if (!name || !definition) { res.status(400).json({ error: 'Missing name or definition' }); return; }
+  const nameCheck = validateName(name);
+  if (!nameCheck.ok) { res.status(400).json({ error: nameCheck.error }); return; }
+  const defCheck = validateCustomToolDefinition(definition);
+  if (!defCheck.ok) { res.status(400).json({ error: defCheck.error }); return; }
+  try {
+    await writeCustomTool(name, definition);
+    res.json({ ok: true, path: `data/bootstrap/custom-tools/${name}.json` });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `Failed to write custom tool: ${msg}` });
+  }
+});
+
+// --- Bootstrap: Custom Route CRUD ---
+
+app.post('/api/svg/:drawId/bootstrap/write-custom-route', async (req: Request, res: Response) => {
+  const { name, definition } = req.body as { name?: string; definition?: any };
+  if (!name || !definition) { res.status(400).json({ error: 'Missing name or definition' }); return; }
+  const nameCheck = validateName(name);
+  if (!nameCheck.ok) { res.status(400).json({ error: nameCheck.error }); return; }
+  const defCheck = validateCustomRouteDefinition(definition);
+  if (!defCheck.ok) { res.status(400).json({ error: defCheck.error }); return; }
+  try {
+    await writeCustomRoute(name, definition);
+    res.json({ ok: true, path: `data/bootstrap/custom-routes/${name}.json` });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `Failed to write custom route: ${msg}` });
+  }
+});
+
+// --- Bootstrap: Rollback ---
+
+app.post('/api/svg/:drawId/bootstrap/rollback', async (req: Request, res: Response) => {
+  const { type, name, version } = req.body as { type?: string; name?: string; version?: number };
+  const check = validateRollback({ type, name, version });
+  if (!check.ok) { res.status(400).json({ error: check.error }); return; }
+  try {
+    const ok = await rollbackAsset(
+      type as 'custom-filter' | 'custom-style' | 'custom-tool' | 'custom-route' | 'prompt-extension' | 'skill',
+      name!,
+      version!,
+    );
+    if (!ok) { res.status(404).json({ error: 'Version not found' }); return; }
+    res.json({ ok: true, rolled_back_to: version });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `Rollback failed: ${msg}` });
+  }
+});
+
+// --- Bootstrap: History ---
+
+app.post('/api/svg/:drawId/bootstrap/history', async (req: Request, res: Response) => {
+  const { type, name } = req.body as { type?: string; name?: string };
+  if (!type || !name) { res.status(400).json({ error: 'Missing type or name' }); return; }
+  const nameCheck = validateName(name);
+  if (!nameCheck.ok) { res.status(400).json({ error: nameCheck.error }); return; }
+  try {
+    const history = await getAssetHistory(
+      type as 'custom-filter' | 'custom-style' | 'custom-tool' | 'custom-route' | 'prompt-extension' | 'skill',
+      name,
+    );
+    res.json({ ok: true, versions: history });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `Failed to get history: ${msg}` });
+  }
+});
+
+// --- Custom Tool Execution ---
+
+app.post('/api/svg/:drawId/custom-tool/:toolName', async (req: Request, res: Response) => {
+  const drawId = req.params.drawId as string;
+  const toolName = req.params.toolName as string;
+  const tool = await loadCustomTool(toolName);
+  if (!tool) { res.status(404).json({ error: `Custom tool not found: ${toolName}` }); return; }
+  try {
+    const result = await executePipeline(tool.handler.steps, {
+      drawId,
+      vars: {},
+      prev: undefined,
+      input: req.body as Record<string, unknown>,
+    }, pipelineDeps);
+    res.json({ ok: true, result });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `Custom tool execution failed: ${msg}` });
+  }
+});
+
+// --- Custom Route Execution ---
+
+app.post('/api/svg/:drawId/custom/:routeName', async (req: Request, res: Response) => {
+  const drawId = req.params.drawId as string;
+  const routeName = req.params.routeName as string;
+  const route = await loadCustomRoute(routeName);
+  if (!route) { res.status(404).json({ error: `Custom route not found: ${routeName}` }); return; }
+  try {
+    const result = await executePipeline(route.handler.steps, {
+      drawId,
+      vars: {},
+      prev: undefined,
+      input: req.body as Record<string, unknown>,
+    }, pipelineDeps);
+    res.json({ ok: true, result });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `Custom route execution failed: ${msg}` });
+  }
+});
+
+// --- Bootstrap: Custom Tool Definition (for MCP server) ---
+
+app.post('/api/svg/bootstrap/custom-tool-def/:toolName', async (req: Request, res: Response) => {
+  const toolName = req.params.toolName as string;
+  const tool = await loadCustomTool(toolName);
+  if (!tool) { res.status(404).json({ error: `Custom tool not found: ${toolName}` }); return; }
+  res.json(tool);
 });
 
 // --- SVG direct update endpoint (used by tests and internal tools) ---

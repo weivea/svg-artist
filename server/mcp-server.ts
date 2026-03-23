@@ -434,10 +434,128 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
+// Phase 2: Custom Tools, Routes, Versioning (4)
+// ---------------------------------------------------------------------------
+
+server.tool(
+  'write_custom_tool',
+  'Define a new MCP tool with a pipeline handler. The tool becomes available as custom_<name> after reload_session. Pipeline steps call predefined actions (get_layers, apply_filter, transform_layer, etc.).',
+  {
+    name: z.string().describe('Tool name in kebab-case (e.g. "batch-filter")'),
+    definition: z.object({
+      description: z.string().describe('What this tool does'),
+      input_schema: z.record(z.string(), z.object({
+        type: z.string(),
+        description: z.string().optional(),
+        items: z.any().optional(),
+        optional: z.boolean().optional(),
+      })).describe('Input parameter definitions'),
+      handler: z.object({
+        type: z.literal('pipeline'),
+        steps: z.array(z.object({
+          action: z.string().describe('Action name from registry'),
+          params: z.record(z.string(), z.any()).optional().describe('Parameters with {{}} template syntax'),
+          for_each: z.string().optional().describe('Array to iterate over'),
+          store_as: z.string().optional().describe('Variable name to store result'),
+        })),
+      }),
+    }),
+  },
+  async (params) => textTool('bootstrap/write-custom-tool', params),
+);
+
+server.tool(
+  'write_custom_route',
+  'Define a new API route with a pipeline handler. Route mounts at /api/svg/:drawId/custom/<name> after reload_session.',
+  {
+    name: z.string().describe('Route name in kebab-case'),
+    definition: z.object({
+      path: z.string().describe('Route path (must start with /custom/)'),
+      method: z.literal('POST'),
+      description: z.string().describe('What this route does'),
+      input_schema: z.record(z.string(), z.object({
+        type: z.string(),
+        description: z.string().optional(),
+        items: z.any().optional(),
+        optional: z.boolean().optional(),
+      })).describe('Input parameter definitions'),
+      handler: z.object({
+        type: z.literal('pipeline'),
+        steps: z.array(z.object({
+          action: z.string(),
+          params: z.record(z.string(), z.any()).optional(),
+          for_each: z.string().optional(),
+          store_as: z.string().optional(),
+        })),
+      }),
+    }),
+  },
+  async (params) => textTool('bootstrap/write-custom-route', params),
+);
+
+server.tool(
+  'rollback_asset',
+  'Roll back any bootstrap asset to a previous version. Does NOT auto-reload — call reload_session after.',
+  {
+    type: z.enum(['filter', 'style', 'tool', 'route', 'skill', 'prompt']).describe('Asset type'),
+    name: z.string().describe('Asset name'),
+    version: z.number().int().positive().optional().describe('Target version (default: previous)'),
+  },
+  async (params) => textTool('bootstrap/rollback', params),
+);
+
+server.tool(
+  'get_asset_history',
+  'View version history of a bootstrap asset',
+  {
+    type: z.enum(['filter', 'style', 'tool', 'route', 'skill', 'prompt']).describe('Asset type'),
+    name: z.string().describe('Asset name'),
+  },
+  async (params) => textTool('bootstrap/history', params),
+);
+
+// ---------------------------------------------------------------------------
+// Dynamic custom tool registration (loaded at startup)
+// ---------------------------------------------------------------------------
+
+async function registerCustomTools(): Promise<void> {
+  try {
+    const res = await callApi('bootstrap/list');
+    if (!res.ok || !res.data) return;
+    const assets = res.data as { custom_tools?: string[] };
+    if (!assets.custom_tools || assets.custom_tools.length === 0) return;
+
+    for (const toolName of assets.custom_tools) {
+      const toolRes = await fetch(`${CALLBACK_URL}/bootstrap/custom-tool-def/${toolName}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      if (!toolRes.ok) continue;
+      const toolDef = await toolRes.json() as {
+        name: string;
+        description: string;
+        input_schema: Record<string, any>;
+      };
+
+      server.tool(
+        `custom_${toolDef.name}`,
+        toolDef.description,
+        { params: z.record(z.string(), z.any()).optional().describe('Custom tool parameters') },
+        async ({ params }) => textTool(`custom-tool/${toolDef.name}`, params || {}),
+      );
+    }
+  } catch {
+    // Custom tools unavailable — not fatal, continue with built-in tools only
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Start server
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
+  await registerCustomTools();
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

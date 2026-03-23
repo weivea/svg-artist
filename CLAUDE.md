@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SVG Artist is a web-based drawing application with a React frontend and Node.js backend. Users describe artwork in natural language via an embedded Claude Code terminal (xterm.js), and Claude generates SVG content through a layer-based drawing system rendered in a live preview pane. The app supports multiple concurrent drawings, each with its own Claude CLI instance and isolated WebSocket channels. Claude operates as a professional SVG artist with 22 MCP tools for layer management, transforms, defs, preview, canvas, filters, styles, palettes, and composition critique, plus a drawing skills plugin loaded via `--plugin-dir` with 10 professional-grade skills, 1 agent, and 2 commands.
+SVG Artist is a web-based drawing application with a React frontend and Node.js backend. Users describe artwork in natural language via an embedded Claude Code terminal (xterm.js), and Claude generates SVG content through a layer-based drawing system rendered in a live preview pane. The app supports multiple concurrent drawings, each with its own Claude CLI instance and isolated WebSocket channels. Claude operates as a professional SVG artist with 28 MCP tools for layer management, transforms, defs, preview, canvas, filters, styles, palettes, composition critique, and self-bootstrapping, plus a drawing skills plugin loaded via `--plugin-dir` with 10 professional-grade skills, 1 agent, and 2 commands.
 
 ## Commands
 
@@ -34,11 +34,11 @@ Browser (:5173 dev / :3000 prod)
   │                                DELETE /api/drawings/:id  ├── SvgEngine (linkedom DOM manipulation)
   └── DrawPage (/draw/:drawId)                               ├── PngRenderer (resvg-js → PNG preview)
       ├── SVG Preview (left)  ←── WS /ws/svg/:drawId ───────┤
-      │   (region selection)                                  ├── Layer/Canvas/Preview API routes
+      │   (region selection)                                  ├── Layer/Canvas/Preview/Bootstrap API routes
       └── Terminal (right)    ←→ WS /ws/terminal/:drawId ←→ SessionManager
                                                               └── Map<drawId, PtyManager>
                                                                   └── spawns Claude CLI with:
-                                                                      --mcp-config  (22 tools)
+                                                                      --mcp-config  (28 tools)
                                                                       --plugin-dir  (10 skills, 1 agent)
                                                                       --append-system-prompt (layer guide)
 ```
@@ -69,6 +69,7 @@ Browser (:5173 dev / :3000 prod)
 - `GET /api/drawings` — List all drawings (with svgContent for thumbnails)
 - `POST /api/drawings` — Create new drawing (generates id, sessionId, default SVG)
 - `DELETE /api/drawings/:drawId` — Delete drawing and kill active Claude CLI process
+- `POST /api/svg/:drawId/bootstrap/*` — Bootstrap write/list/reload (6 endpoints)
 
 **SVG update flow:** User prompt → Claude CLI → layer MCP tools (add_layer, update_layer, etc.) → MCP server POSTs to `/api/svg/:drawId/layers/*` → Express backend parses SVG DOM with SvgEngine (linkedom), applies operation, serializes back → broadcasts updated SVG via `/ws/svg/:drawId` → React re-renders preview → SVG persisted to `data/drawings.json`
 
@@ -89,9 +90,30 @@ Browser (:5173 dev / :3000 prod)
 - **MCP callback architecture** — The MCP server runs as a child process of Claude CLI (spawned via `--mcp-config mcp-config.json`). It communicates with Claude over stdin/stdout (JSON-RPC) and with the Express server over HTTP. The callback URL is per-drawId via environment variable
 - **Layer-based drawing** — SVG content is structured using `<g>` layers with `id="layer-*"` and `data-name` attributes. SvgEngine parses SVG with linkedom, applies layer operations, and serializes back. Write operations return minimal JSON (not full SVG) to avoid large payloads
 - **Drawing plugin** — `plugins/svg-drawing/` loaded via `--plugin-dir` provides 10 drawing skills (svg-fundamentals, bezier-and-curves, color-and-gradients, composition, layer-workflow, svg-filters-and-effects, illustration-styles, character-illustration, advanced-color-composition, materials-and-textures), 1 agent (design-advisor with sonnet model for integrated research + design), and 2 commands (`/reference`, `/design`). The design-advisor agent searches the web, downloads and compresses reference images to `data/references/<drawId>/`, analyzes them visually, and generates design proposals.
-- **22 MCP tools** — Information query (3), layer management (7), transform & style (3), defs resources (2), canvas (1), preview (2), professional tools (4: apply_filter, apply_style_preset, get_color_palette, critique_composition)
+- **Self-bootstrapping** — Claude can extend its own capabilities mid-session by writing custom filters, styles, skills, and prompt extensions to `data/bootstrap/`, then reloading the CLI process with `--resume` to pick up changes. The reload preserves conversation context via session resumption
+- **28 MCP tools** — Information query (3), layer management (7), transform & style (3), defs resources (2), canvas (1), preview (2), professional tools (4: apply_filter, apply_style_preset, get_color_palette, critique_composition), bootstrap (6: write_skill, write_filter, write_style, write_prompt_extension, reload_session, list_bootstrap_assets)
 - **`DISABLE_PTY=1`** — Environment variable that makes the terminal WebSocket send a test-mode message instead of spawning Claude CLI; used by Playwright integration tests
 - **Backend is TypeScript (ES modules, run via tsx)** — Both frontend and backend are TypeScript; server uses a separate `tsconfig.server.json` without DOM types
+
+## Self-Bootstrapping
+
+Claude can self-improve during a drawing session by creating custom capabilities and reloading:
+
+**Bootstrap MCP tools (6):**
+- `write_skill` — Create/update SKILL.md in plugins directory
+- `write_filter` — Create custom SVG filter template (JSON with `{{param:default}}` syntax)
+- `write_style` — Create custom style preset (JSON with layer pattern matching)
+- `write_prompt_extension` — Append to system prompt (Markdown)
+- `reload_session` — Kill CLI + respawn with `--resume` + auto-inject continuation prompt
+- `list_bootstrap_assets` — List all custom and built-in assets
+
+**Bootstrap data:** `data/bootstrap/` (custom-filters/, custom-styles/, prompt-extensions/)
+
+**Custom filter template syntax:** `{{id}}` for filter element id, `{{param:default}}` for parameters
+
+**Reload flow:** MCP tool → POST `/api/svg/:drawId/bootstrap/reload` → PtyManager.respawn() → kill PTY → wait 500ms → spawn with `--resume` → wait for CLI ready (2s debounce, 15s timeout) → inject continuation prompt to stdin → Claude auto-continues
+
+**Validation:** kebab-case names, no path traversal, `<filter` tag required in templates, size limits (skills 50KB, prompts 10KB)
 
 ## Project Structure
 
@@ -108,14 +130,16 @@ Browser (:5173 dev / :3000 prod)
   - `session-manager.ts` — Manages `Map<drawId, PtyManager>` instances
   - `pty-manager.ts` — Claude CLI PTY lifecycle + stdin interception + session resume + plugin-dir + append-system-prompt
   - `drawing-store.ts` — JSON-file CRUD for drawings (`data/drawings.json`)
-  - `mcp-server.ts` — MCP server with 22 tools (layer CRUD, transform, defs, canvas, preview, filters, styles, palettes, critique)
+  - `mcp-server.ts` — MCP server with 28 tools (layer CRUD, transform, defs, canvas, preview, filters, styles, palettes, critique, bootstrap)
   - `svg-engine.ts` — SVG DOM manipulation layer: parses SVG with linkedom, executes layer/defs/viewBox/filter/style operations
   - `png-renderer.ts` — SVG to PNG conversion via resvg-js for full canvas and per-layer preview
   - `filter-templates.ts` — 9 SVG filter type builders (drop-shadow, blur, glow, emboss, noise-texture, paper, watercolor, metallic, glass)
   - `style-presets.ts` — 6 style preset builders (flat, isometric, line-art, watercolor, retro, minimalist)
   - `color-palettes.ts` — HSL-based color palette generation with theme/mood mappings
   - `composition-analyzer.ts` — 7-dimension composition analysis (purpose, hierarchy, unity, variety, proportion, rhythm, emphasis)
-- `data/` — Runtime data directory (gitignored): `drawings.json`, `references/<drawId>/` (downloaded reference images)
+  - `bootstrap-store.ts` — CRUD for `data/bootstrap/` custom filters, styles, prompt extensions, and skills
+  - `bootstrap-validator.ts` — Path safety and format validation for bootstrap writes
+- `data/` — Runtime data directory (gitignored): `drawings.json`, `references/<drawId>/` (downloaded reference images), `bootstrap/` (custom filters, styles, prompt extensions)
 - `e2e/integration/` — Playwright tests that run with PTY disabled (30s timeout, 1 retry)
 - `e2e/full-flow/` — Playwright tests requiring real Claude CLI (120s timeout, 0 retries)
 - `e2e/helpers/` — Test fixtures, SVG samples, and navigation helpers
@@ -157,5 +181,6 @@ Integration test suites:
 - `preview-api.spec.ts` — PNG preview (full canvas, per-layer) and element bounding box
 - `filter-style-api.spec.ts` — Filter application (drop-shadow, glow, metallic) and style presets (flat, line-art, watercolor)
 - `palette-critique-api.spec.ts` — Color palette generation (themes, moods) and composition critique (7-dimension scoring)
+- `bootstrap-api.spec.ts` — Bootstrap write/list operations, validation, custom filter application
 
 Test helpers: `e2e/fixtures.ts` (extends Playwright with APIRequestContext), `e2e/helpers/svg-samples.ts`, `e2e/helpers/navigate-to-drawing.ts` (creates drawing via API and navigates to draw page).

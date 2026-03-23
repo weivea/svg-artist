@@ -606,8 +606,25 @@ app.post('/api/svg/:drawId/bootstrap/write-custom-route', async (req: Request, r
 
 // --- Bootstrap: Rollback ---
 
+// Map short MCP type names to internal asset type names
+const ASSET_TYPE_MAP: Record<string, string> = {
+  'filter': 'custom-filter',
+  'style': 'custom-style',
+  'tool': 'custom-tool',
+  'route': 'custom-route',
+  'prompt': 'prompt-extension',
+  'skill': 'skill',
+  // Also accept the full internal names directly
+  'custom-filter': 'custom-filter',
+  'custom-style': 'custom-style',
+  'custom-tool': 'custom-tool',
+  'custom-route': 'custom-route',
+  'prompt-extension': 'prompt-extension',
+};
+
 app.post('/api/svg/:drawId/bootstrap/rollback', async (req: Request, res: Response) => {
-  const { type, name, version } = req.body as { type?: string; name?: string; version?: number };
+  const { type: rawType, name, version } = req.body as { type?: string; name?: string; version?: number };
+  const type = rawType ? (ASSET_TYPE_MAP[rawType] || rawType) : rawType;
   const check = validateRollback({ type, name, version });
   if (!check.ok) { res.status(400).json({ error: check.error }); return; }
   try {
@@ -627,7 +644,8 @@ app.post('/api/svg/:drawId/bootstrap/rollback', async (req: Request, res: Respon
 // --- Bootstrap: History ---
 
 app.post('/api/svg/:drawId/bootstrap/history', async (req: Request, res: Response) => {
-  const { type, name } = req.body as { type?: string; name?: string };
+  const { type: rawType, name } = req.body as { type?: string; name?: string };
+  const type = rawType ? (ASSET_TYPE_MAP[rawType] || rawType) : rawType;
   if (!type || !name) { res.status(400).json({ error: 'Missing type or name' }); return; }
   const nameCheck = validateName(name);
   if (!nameCheck.ok) { res.status(400).json({ error: nameCheck.error }); return; }
@@ -687,7 +705,7 @@ app.post('/api/svg/:drawId/custom/:routeName', async (req: Request, res: Respons
 
 // --- Bootstrap: Custom Tool Definition (for MCP server) ---
 
-app.post('/api/svg/bootstrap/custom-tool-def/:toolName', async (req: Request, res: Response) => {
+app.post('/api/svg/:drawId/bootstrap/custom-tool-def/:toolName', async (req: Request, res: Response) => {
   const toolName = req.params.toolName as string;
   const tool = await loadCustomTool(toolName);
   if (!tool) { res.status(404).json({ error: `Custom tool not found: ${toolName}` }); return; }

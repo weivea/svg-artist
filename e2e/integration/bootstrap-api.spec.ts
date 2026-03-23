@@ -266,9 +266,9 @@ test.describe('Bootstrap API', () => {
         },
       },
     });
-    // Check history
+    // Check history — use short MCP type name 'filter' (maps to 'custom-filter')
     const historyRes = await apiContext.post(`/api/svg/${drawId}/bootstrap/history`, {
-      data: { type: 'custom-filter', name: 'versioned-filter' },
+      data: { type: 'filter', name: 'versioned-filter' },
     });
     expect(historyRes.ok()).toBeTruthy();
     const body = await historyRes.json();
@@ -302,9 +302,9 @@ test.describe('Bootstrap API', () => {
         },
       },
     });
-    // Rollback to v1
+    // Rollback to v1 — use short MCP type name 'filter' (maps to 'custom-filter')
     const res = await apiContext.post(`/api/svg/${drawId}/bootstrap/rollback`, {
-      data: { type: 'custom-filter', name: 'rollback-test', version: 1 },
+      data: { type: 'filter', name: 'rollback-test', version: 1 },
     });
     expect(res.ok()).toBeTruthy();
     const body = await res.json();

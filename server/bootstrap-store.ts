@@ -56,6 +56,7 @@ export interface CustomRouteDef {
   description: string;
   path: string;
   method: string;
+  input_schema: Record<string, unknown>;
   handler: {
     type: 'pipeline';
     steps: PipelineStepDef[];
@@ -66,7 +67,7 @@ export interface CustomRouteDef {
 
 export interface PipelineStepDef {
   action: string;
-  params: Record<string, unknown>;
+  params?: Record<string, unknown>;
   store_as?: string;
   for_each?: string;
 }

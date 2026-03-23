@@ -300,7 +300,17 @@ server.tool(
 
 server.tool(
   'apply_filter',
-  'Apply a preset filter effect (drop-shadow, blur, glow, emboss, noise-texture, paper, watercolor, metallic, glass) to a layer',
+  `Apply a preset filter effect to a layer. Each filter accepts specific parameters:
+- drop-shadow: dx (4), dy (4), blur (6), color ("#000000"), opacity (0.5)
+- blur: radius (5)
+- glow: radius (10), color ("#ffffff"), opacity (0.8)
+- emboss: strength (2)
+- noise-texture: frequency (0.65), octaves (3), type ("fractalNoise")
+- paper: frequency (0.04), intensity (0.15)
+- watercolor: displacement (20), blur (3)
+- metallic: shininess (30), light_x (200), light_y (100)
+- glass: shininess (50), opacity (0.3)
+Values in parentheses are defaults. Pass params as key-value pairs.`,
   {
     layer_id: z.string().describe('The layer id to apply the filter to'),
     filter_type: z.enum([
@@ -308,7 +318,7 @@ server.tool(
       'paper', 'watercolor', 'metallic', 'glass',
     ]).describe('Type of filter to apply'),
     params: z.record(z.string(), z.union([z.number(), z.string()])).optional().describe(
-      'Filter-specific parameters (e.g., { dx: 4, dy: 4, blur: 6 } for drop-shadow)',
+      'Filter-specific parameters (see description for each filter type)',
     ),
   },
   async (params) => textTool('filter/apply', params),

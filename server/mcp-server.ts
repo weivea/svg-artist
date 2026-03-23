@@ -497,7 +497,7 @@ server.tool(
   'rollback_asset',
   'Roll back any bootstrap asset to a previous version. Does NOT auto-reload — call reload_session after.',
   {
-    type: z.enum(['filter', 'style', 'tool', 'route', 'skill', 'prompt']).describe('Asset type'),
+    type: z.enum(['filter', 'style', 'tool', 'route', 'macro', 'skill', 'prompt']).describe('Asset type'),
     name: z.string().describe('Asset name'),
     version: z.number().int().positive().optional().describe('Target version (default: previous)'),
   },
@@ -508,10 +508,36 @@ server.tool(
   'get_asset_history',
   'View version history of a bootstrap asset',
   {
-    type: z.enum(['filter', 'style', 'tool', 'route', 'skill', 'prompt']).describe('Asset type'),
+    type: z.enum(['filter', 'style', 'tool', 'route', 'macro', 'skill', 'prompt']).describe('Asset type'),
     name: z.string().describe('Asset name'),
   },
   async (params) => textTool('bootstrap/history', params),
+);
+
+server.tool(
+  'write_macro',
+  'Define a reusable pipeline macro — a named sequence of actions. Available as macro_<name> action in pipelines and as MCP tool after reload_session.',
+  {
+    name: z.string().describe('Macro name in kebab-case (e.g. "mirror-layer")'),
+    definition: z.object({
+      description: z.string().describe('What this macro does'),
+      input_schema: z.record(z.string(), z.object({
+        type: z.string(),
+        description: z.string().optional(),
+        items: z.any().optional(),
+        optional: z.boolean().optional(),
+      })).describe('Input parameter definitions'),
+      macro: z.object({
+        steps: z.array(z.object({
+          action: z.string().describe('Action name from registry'),
+          params: z.record(z.string(), z.any()).optional().describe('Parameters with {{}} template syntax'),
+          for_each: z.string().optional().describe('Array to iterate over'),
+          store_as: z.string().optional().describe('Variable name to store result'),
+        })),
+      }),
+    }),
+  },
+  async (params) => textTool('bootstrap/write-macro', params),
 );
 
 // ---------------------------------------------------------------------------
@@ -522,28 +548,54 @@ async function registerCustomTools(): Promise<void> {
   try {
     const res = await callApi('bootstrap/list');
     if (!res.ok || !res.data) return;
-    const assets = res.data as { custom_tools?: string[] };
-    if (!assets.custom_tools || assets.custom_tools.length === 0) return;
+    const assets = res.data as { custom_tools?: string[]; custom_macros?: string[] };
 
-    for (const toolName of assets.custom_tools) {
-      const toolRes = await fetch(`${CALLBACK_URL}/bootstrap/custom-tool-def/${toolName}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{}',
-      });
-      if (!toolRes.ok) continue;
-      const toolDef = await toolRes.json() as {
-        name: string;
-        description: string;
-        input_schema: Record<string, any>;
-      };
+    // Register custom tools as MCP tools
+    if (assets.custom_tools && assets.custom_tools.length > 0) {
+      for (const toolName of assets.custom_tools) {
+        const toolRes = await fetch(`${CALLBACK_URL}/bootstrap/custom-tool-def/${toolName}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        });
+        if (!toolRes.ok) continue;
+        const toolDef = await toolRes.json() as {
+          name: string;
+          description: string;
+          input_schema: Record<string, any>;
+        };
 
-      server.tool(
-        `custom_${toolDef.name}`,
-        toolDef.description,
-        { params: z.record(z.string(), z.any()).optional().describe('Custom tool parameters') },
-        async ({ params }) => textTool(`custom-tool/${toolDef.name}`, params || {}),
-      );
+        server.tool(
+          `custom_${toolDef.name}`,
+          toolDef.description,
+          { params: z.record(z.string(), z.any()).optional().describe('Custom tool parameters') },
+          async ({ params }) => textTool(`custom-tool/${toolDef.name}`, params || {}),
+        );
+      }
+    }
+
+    // Register custom macros as MCP tools
+    if (assets.custom_macros && assets.custom_macros.length > 0) {
+      for (const macroName of assets.custom_macros) {
+        const macroRes = await fetch(`${CALLBACK_URL}/bootstrap/macro-def/${macroName}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        });
+        if (!macroRes.ok) continue;
+        const macroDef = await macroRes.json() as {
+          name: string;
+          description: string;
+          input_schema: Record<string, any>;
+        };
+
+        server.tool(
+          `macro_${macroDef.name}`,
+          macroDef.description,
+          { params: z.record(z.string(), z.any()).optional().describe('Macro parameters') },
+          async ({ params }) => textTool(`macro/${macroDef.name}`, params || {}),
+        );
+      }
     }
   } catch {
     // Custom tools unavailable — not fatal, continue with built-in tools only

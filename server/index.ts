@@ -702,6 +702,32 @@ app.post('/api/svg/:drawId/scratch/create', async (req: Request, res: Response) 
   }
 });
 
+app.post('/api/svg/:drawId/scratch/:canvasId/layers/add', async (req: Request, res: Response) => {
+  const { name, content, parent_id, position } = req.body as { name?: string; content?: string; parent_id?: string; position?: number };
+  if (!name || !content) { res.status(400).json({ error: 'Missing name or content' }); return; }
+  const engine = scratchStore.get(req.params.canvasId as string);
+  if (!engine) { res.status(404).json({ error: 'Scratch canvas not found' }); return; }
+  const layerId = engine.addLayer(name, content, parent_id, position);
+  if (!layerId) { res.status(404).json({ error: 'Parent layer not found' }); return; }
+  res.json({ ok: true, layer_id: layerId });
+});
+
+app.post('/api/svg/:drawId/scratch/:canvasId/layers/update', async (req: Request, res: Response) => {
+  const { layer_id, content } = req.body as { layer_id?: string; content?: string };
+  if (!layer_id || !content) { res.status(400).json({ error: 'Missing layer_id or content' }); return; }
+  const engine = scratchStore.get(req.params.canvasId as string);
+  if (!engine) { res.status(404).json({ error: 'Scratch canvas not found' }); return; }
+  const ok = engine.updateLayer(layer_id, content);
+  if (!ok) { res.status(404).json({ error: 'Layer not found' }); return; }
+  res.json({ ok: true });
+});
+
+app.post('/api/svg/:drawId/scratch/:canvasId/layers/list', async (req: Request, res: Response) => {
+  const engine = scratchStore.get(req.params.canvasId as string);
+  if (!engine) { res.status(404).json({ error: 'Scratch canvas not found' }); return; }
+  res.json({ layers: engine.listLayers() });
+});
+
 // --- Custom Tool Execution ---
 
 app.post('/api/svg/:drawId/custom-tool/:toolName', async (req: Request, res: Response) => {

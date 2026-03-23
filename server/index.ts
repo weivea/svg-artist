@@ -808,6 +808,11 @@ process.on('SIGINT', () => {
 // Load custom routes/tools/macros into registry
 await routeRegistry.reloadAll(pipelineDeps);
 
+// Wire up hot-reload: when a session respawns, refresh the global registry
+sessionManager.setOnReload(async () => {
+  await routeRegistry.reloadAll(pipelineDeps);
+});
+
 server.listen(PORT, () => {
   console.log(`SVG Artist server listening on http://localhost:${PORT}`);
 });

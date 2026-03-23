@@ -33,6 +33,7 @@ import {
 import { executePipeline } from './pipeline-engine.js';
 import type { PipelineContext, PipelineDeps } from './pipeline-engine.js';
 import { routeRegistry } from './custom-route-registry.js';
+import { ScratchCanvasStore } from './scratch-canvas-store.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -48,6 +49,7 @@ app.use(express.static(join(__dirname, '..', 'dist')));
 
 const sessionManager = new SessionManager();
 const drawingStore = new DrawingStore();
+const scratchStore = new ScratchCanvasStore();
 
 // Pipeline execution dependencies (used by custom tools and routes)
 const pipelineDeps: PipelineDeps = {
@@ -684,6 +686,17 @@ app.post('/api/svg/:drawId/bootstrap/history', async (req: Request, res: Respons
   }
 });
 
+// --- Scratch Canvas Routes ──────────────────────────────────────────
+app.post('/api/svg/:drawId/scratch/create', async (req: Request, res: Response) => {
+  const { viewBox, background } = req.body as { viewBox?: string; background?: string };
+  if (!viewBox) { res.status(400).json({ error: 'Missing viewBox' }); return; }
+  const drawId = req.params.drawId as string;
+  const drawing = await drawingStore.get(drawId);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const result = scratchStore.create(drawId, viewBox, background);
+  res.json(result);
+});
+
 // --- Custom Tool Execution ---
 
 app.post('/api/svg/:drawId/custom-tool/:toolName', async (req: Request, res: Response) => {
@@ -802,6 +815,7 @@ app.post('/api/drawings', async (_req: Request, res: Response) => {
 app.delete('/api/drawings/:drawId', async (req: Request, res: Response) => {
   const drawId = req.params.drawId as string;
   sessionManager.destroy(drawId);
+  scratchStore.deleteByDrawId(drawId);
   const deleted = await drawingStore.delete(drawId);
   if (!deleted) {
     res.status(404).json({ error: 'Drawing not found' });

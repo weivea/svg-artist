@@ -135,7 +135,14 @@ export class SvgEngine {
     return element;
   }
 
-  addLayer(name: string, content: string, parentId?: string, position?: number): string | null {
+  addLayer(name: string, content?: string, parentId?: string, position?: number, sourceLayerId?: string): string | null {
+    let layerContent = content || '';
+    if (sourceLayerId) {
+      const sourceElement = this._findLayerElement(sourceLayerId);
+      if (!sourceElement) return null;
+      layerContent = sourceElement.innerHTML;
+    }
+
     // Determine parent element
     let parent: LElement;
     if (parentId) {
@@ -154,7 +161,7 @@ export class SvgEngine {
     const g = this.document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.setAttribute('id', id);
     g.setAttribute('data-name', name);
-    g.innerHTML = content;
+    g.innerHTML = layerContent;
 
     // Insert at position or append
     if (position !== undefined && position !== null) {

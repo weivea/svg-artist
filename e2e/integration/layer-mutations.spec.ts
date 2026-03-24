@@ -95,4 +95,20 @@ test.describe('Layer API — Mutations', () => {
     expect(moon).toBeTruthy();
     expect(moon.name).toBe('月亮');
   });
+
+  test('add_layer with source_layer_id copies content from existing layer', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/layers/add`, {
+      data: { name: 'sun copy', source_layer_id: 'layer-sun' },
+    });
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect(body.layer_id).toBeTruthy();
+    const layerRes = await apiContext.post(`/api/svg/${drawId}/layers/get`, {
+      data: { layer_id: body.layer_id },
+    });
+    const layerBody = await layerRes.json();
+    expect(layerBody.content).toContain('circle');
+    expect(layerBody.content).toContain('FFD700');
+  });
 });

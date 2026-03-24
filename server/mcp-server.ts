@@ -123,10 +123,11 @@ server.tool(
 
 server.tool(
   'add_layer',
-  'Add a new layer with SVG content. Optionally nest under a parent or set position',
+  'Add a new layer with SVG content, or duplicate an existing layer by providing source_layer_id',
   {
     name: z.string().describe('Name for the new layer'),
-    content: z.string().describe('SVG content for the layer'),
+    content: z.string().optional().describe('SVG content for the layer (required unless source_layer_id is set)'),
+    source_layer_id: z.string().optional().describe('Copy content from this existing layer (replaces duplicate_layer)'),
     parent_id: z.string().optional().describe('Parent layer id to nest under'),
     position: z.number().optional().describe('Insert position among siblings (0-based)'),
   },

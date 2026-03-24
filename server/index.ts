@@ -237,14 +237,14 @@ app.post('/api/svg/:drawId/layers/get', async (req: Request, res: Response) => {
 
 // --- Layer Mutation API ---
 app.post('/api/svg/:drawId/layers/add', async (req: Request, res: Response) => {
-  const { name, content, parent_id, position } = req.body as { name?: string; content?: string; parent_id?: string; position?: number };
-  if (!name || !content) { res.status(400).json({ error: 'Missing name or content' }); return; }
+  const { name, content, parent_id, position, source_layer_id } = req.body as { name?: string; content?: string; parent_id?: string; position?: number; source_layer_id?: string };
+  if (!name || (!content && !source_layer_id)) { res.status(400).json({ error: 'Missing name or content/source_layer_id' }); return; }
   const drawId = req.params.drawId as string;
   const drawing = await drawingStore.get(drawId);
   if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
   const engine = new SvgEngine(drawing.svgContent);
-  const layerId = engine.addLayer(name, content, parent_id, position);
-  if (!layerId) { res.status(404).json({ error: 'Parent layer not found' }); return; }
+  const layerId = engine.addLayer(name, content, parent_id, position, source_layer_id);
+  if (!layerId) { res.status(404).json({ error: 'Parent or source layer not found' }); return; }
   const svg = engine.serialize();
   await drawingStore.updateSvg(drawId, svg);
   broadcastSvg(drawId, svg);

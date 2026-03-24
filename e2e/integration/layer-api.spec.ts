@@ -88,6 +88,56 @@ test.describe('Layer API — Query Operations', () => {
     expect(hexColors).toContain('#0000ff');
   });
 
+  test('get_layer_colors returns HSL values for hex colors', async ({ apiContext }) => {
+    const createRes = await apiContext.post('/api/drawings');
+    const drawing = await createRes.json();
+    const drawId = drawing.id;
+
+    const colorSvg = `<svg viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">
+      <g id="layer-colorful" data-name="colorful">
+        <rect x="0" y="0" width="400" height="400" fill="#ff0000" stroke="#00ff00"/>
+        <circle cx="200" cy="200" r="50" fill="#0000ff"/>
+      </g>
+    </svg>`;
+    await apiContext.post(`/api/svg/${drawId}`, { data: { svg: colorSvg } });
+
+    const res = await apiContext.post(`/api/svg/${drawId}/layers/colors`, {
+      data: { layer_id: 'layer-colorful' },
+    });
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    // All hex colors should have HSL
+    const redEntry = body.colors.find((c: any) => c.color === '#ff0000');
+    expect(redEntry).toBeTruthy();
+    expect(redEntry.hsl).toBeTruthy();
+    expect(redEntry.hsl.h).toBe(0);
+    expect(redEntry.hsl.s).toBe(100);
+    expect(redEntry.hsl.l).toBe(50);
+    expect(redEntry.source).toBe('attribute');
+
+    const blueEntry = body.colors.find((c: any) => c.color === '#0000ff');
+    expect(blueEntry).toBeTruthy();
+    expect(blueEntry.hsl).toBeTruthy();
+    expect(blueEntry.hsl.h).toBe(240);
+  });
+
+  test('get_layer_colors penetrates gradient references', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/layers/colors`, {
+      data: { layer_id: 'layer-bg' },
+    });
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    // layer-bg uses url(#sky-gradient) — should find stop-colors #87CEEB and #4682B4
+    expect(body.colors.some((c: any) => c.source === 'gradient-stop')).toBe(true);
+    const stopColors = body.colors.filter((c: any) => c.source === 'gradient-stop').map((c: any) => c.color);
+    expect(stopColors).toContain('#87CEEB');
+    expect(stopColors).toContain('#4682B4');
+    // Each should have HSL
+    const firstStop = body.colors.find((c: any) => c.source === 'gradient-stop');
+    expect(firstStop.hsl).toBeTruthy();
+  });
+
   test('canvas info returns enhanced layer details', async ({ apiContext }) => {
     const drawId = await setupLayeredDrawing(apiContext);
     const res = await apiContext.post(`/api/svg/${drawId}/canvas/info`);

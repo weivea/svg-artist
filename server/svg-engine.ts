@@ -46,6 +46,28 @@ type LDocument = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type LElement = any;
 
+/** Convert a hex color (or named color) to HSL. Returns null if not a valid 6-digit hex. */
+function hexToHsl(hex: string): { h: number; s: number; l: number } | null {
+  const match = hex.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+  if (!match) return null;
+  let r = parseInt(match[1], 16) / 255;
+  let g = parseInt(match[2], 16) / 255;
+  let b = parseInt(match[3], 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+    }
+  }
+  return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
+}
+
 export class SvgEngine {
   private document: LDocument;
   private svgElement: LElement;
@@ -495,12 +517,24 @@ export class SvgEngine {
     return true;
   }
 
-  /** Extract all colors used in a layer's content */
-  getLayerColors(layerId: string): Array<{ color: string; usage: string; element: string }> | null {
+  /** Extract all colors used in a layer's content, with HSL and gradient penetration */
+  getLayerColors(layerId: string): Array<{
+    color: string;
+    hsl: { h: number; s: number; l: number } | null;
+    usage: string;
+    element: string;
+    source: string;
+  }> | null {
     const element = this._findLayerElement(layerId);
     if (!element) return null;
 
-    const colors: Array<{ color: string; usage: string; element: string }> = [];
+    const colors: Array<{
+      color: string;
+      hsl: { h: number; s: number; l: number } | null;
+      usage: string;
+      element: string;
+      source: string;
+    }> = [];
     const seen = new Set<string>();
 
     const colorAttrs = ['fill', 'stroke', 'stop-color', 'flood-color', 'lighting-color'];
@@ -511,11 +545,25 @@ export class SvgEngine {
       const tag = el.tagName?.toLowerCase() || 'unknown';
       for (const attr of colorAttrs) {
         const value = el.getAttribute(attr);
-        if (value && value !== 'none' && !value.startsWith('url(')) {
-          const key = `${value}:${attr}`;
-          if (!seen.has(key)) {
-            seen.add(key);
-            colors.push({ color: value, usage: attr, element: tag });
+        if (value && value !== 'none') {
+          if (value.startsWith('url(')) {
+            // Gradient penetration: extract stop-colors from referenced gradient
+            const refMatch = value.match(/url\(#([^)]+)\)/);
+            if (refMatch) {
+              this._extractGradientColors(refMatch[1], attr, tag, colors, seen);
+            }
+          } else {
+            const key = `${value}:${attr}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              colors.push({
+                color: value,
+                hsl: hexToHsl(value),
+                usage: attr,
+                element: tag,
+                source: 'attribute',
+              });
+            }
           }
         }
       }
@@ -528,11 +576,24 @@ export class SvgEngine {
           const match = style.match(regex);
           if (match) {
             const value = match[1].trim();
-            if (value !== 'none' && !value.startsWith('url(')) {
-              const key = `${value}:${attr}:style`;
-              if (!seen.has(key)) {
-                seen.add(key);
-                colors.push({ color: value, usage: `${attr} (inline)`, element: tag });
+            if (value !== 'none') {
+              if (value.startsWith('url(')) {
+                const refMatch = value.match(/url\(#([^)]+)\)/);
+                if (refMatch) {
+                  this._extractGradientColors(refMatch[1], `${attr} (inline)`, tag, colors, seen);
+                }
+              } else {
+                const key = `${value}:${attr}:style`;
+                if (!seen.has(key)) {
+                  seen.add(key);
+                  colors.push({
+                    color: value,
+                    hsl: hexToHsl(value),
+                    usage: `${attr} (inline)`,
+                    element: tag,
+                    source: 'attribute',
+                  });
+                }
               }
             }
           }
@@ -541,6 +602,43 @@ export class SvgEngine {
     }
 
     return colors;
+  }
+
+  /** Extract stop-colors from a gradient referenced by id */
+  private _extractGradientColors(
+    gradientId: string,
+    usage: string,
+    element: string,
+    colors: Array<{
+      color: string;
+      hsl: { h: number; s: number; l: number } | null;
+      usage: string;
+      element: string;
+      source: string;
+    }>,
+    seen: Set<string>,
+  ): void {
+    const defs = this.svgElement.querySelector('defs');
+    if (!defs) return;
+    const gradient = defs.querySelector(`[id="${gradientId}"]`);
+    if (!gradient) return;
+    const stops = gradient.querySelectorAll('stop');
+    for (const stop of Array.from(stops) as LElement[]) {
+      const stopColor = stop.getAttribute('stop-color');
+      if (stopColor && stopColor !== 'none') {
+        const key = `${stopColor}:gradient-stop:${gradientId}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          colors.push({
+            color: stopColor,
+            hsl: hexToHsl(stopColor),
+            usage,
+            element,
+            source: 'gradient-stop',
+          });
+        }
+      }
+    }
   }
 
   /** List all defs (gradients, filters, patterns, clipPaths) */

@@ -55,7 +55,9 @@ export function buildPathD(spec: PathSpec): string {
       for (let i = 0; i < corners * 2; i++) {
         const angle = (Math.PI * i) / corners - Math.PI / 2;
         const radius = i % 2 === 0 ? r : ir;
-        points.push(`${cx + radius * Math.cos(angle)} ${cy + radius * Math.sin(angle)}`);
+        const px = Math.round((cx + radius * Math.cos(angle)) * 10000) / 10000;
+        const py = Math.round((cy + radius * Math.sin(angle)) * 10000) / 10000;
+        points.push(`${px} ${py}`);
       }
       return `M ${points.join(' L ')} Z`;
     }
@@ -63,7 +65,7 @@ export function buildPathD(spec: PathSpec): string {
       const [x, y] = spec.start || [0, 0];
       const w = spec.end ? spec.end[0] - x : 100;
       const h = spec.end ? spec.end[1] - y : 100;
-      const cr = spec.corner_radius || 10;
+      const cr = Math.min(spec.corner_radius || 10, w / 2, h / 2);
       return `M ${x + cr} ${y} L ${x + w - cr} ${y} Q ${x + w} ${y} ${x + w} ${y + cr} L ${x + w} ${y + h - cr} Q ${x + w} ${y + h} ${x + w - cr} ${y + h} L ${x + cr} ${y + h} Q ${x} ${y + h} ${x} ${y + h - cr} L ${x} ${y + cr} Q ${x} ${y} ${x + cr} ${y} Z`;
     }
     default:

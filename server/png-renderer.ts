@@ -1,4 +1,5 @@
 import { Resvg } from '@resvg/resvg-js';
+import { parseHTML } from 'linkedom';
 
 /**
  * Render an SVG string to a PNG buffer.
@@ -16,7 +17,7 @@ export function renderSvgToPng(svgString: string, width?: number, height?: numbe
 
 /**
  * Extract a single layer from SVG and render as PNG.
- * Wraps the layer in a new SVG with the same viewBox and defs.
+ * Uses linkedom DOM parsing (same as SvgEngine) for reliable layer extraction.
  */
 export function renderLayerToPng(
   svgString: string,
@@ -25,47 +26,27 @@ export function renderLayerToPng(
   height?: number,
   showBackground?: boolean,
 ): Buffer | null {
-  // Extract viewBox
-  const viewBoxMatch = svgString.match(/viewBox="([^"]+)"/);
-  const viewBox = viewBoxMatch ? viewBoxMatch[1] : '0 0 800 800';
+  const { document } = parseHTML(svgString);
+  const svg = document.querySelector('svg');
+  if (!svg) return null;
 
-  // Extract the xmlns
-  const xmlnsMatch = svgString.match(/xmlns="([^"]+)"/);
-  const xmlns = xmlnsMatch ? xmlnsMatch[1] : 'http://www.w3.org/2000/svg';
+  // Find the layer element by id
+  const layer = svg.querySelector(`[id="${layerId}"]`);
+  if (!layer) return null;
 
-  // Find the layer element (handle nested <g> properly)
-  // Use a non-greedy approach: find the opening tag, then match until the proper closing </g>
-  const layerOpenRegex = new RegExp(`<g[^>]*\\bid="${layerId}"[^>]*>`);
-  const openMatch = svgString.match(layerOpenRegex);
-  if (!openMatch || openMatch.index === undefined) return null;
+  // Get viewBox and xmlns from original SVG
+  const viewBox = svg.getAttribute('viewBox') || '0 0 800 800';
+  const xmlns = svg.getAttribute('xmlns') || 'http://www.w3.org/2000/svg';
 
-  // Find matching closing tag by counting <g> and </g> nesting
-  let depth = 1;
-  let pos = openMatch.index + openMatch[0].length;
-  while (depth > 0 && pos < svgString.length) {
-    const nextOpen = svgString.indexOf('<g', pos);
-    const nextClose = svgString.indexOf('</g>', pos);
-    if (nextClose === -1) break;
-    if (nextOpen !== -1 && nextOpen < nextClose) {
-      depth++;
-      pos = nextOpen + 2;
-    } else {
-      depth--;
-      if (depth === 0) {
-        pos = nextClose + 5; // '</g>'.length = 4, +1
-        break;
-      }
-      pos = nextClose + 4;
-    }
-  }
-  const layerContent = svgString.slice(openMatch.index, pos);
+  // Extract defs if present (layer may reference gradients, filters, etc.)
+  const defs = svg.querySelector('defs');
+  const defsHtml = defs ? defs.outerHTML : '';
 
-  // Extract defs if present (layer may reference gradients)
-  const defsMatch = svgString.match(/<defs>[\s\S]*?<\/defs>/i);
-  const defs = defsMatch ? defsMatch[0] : '';
+  // Serialize the layer element via DOM — guaranteed well-formed
+  const layerHtml = layer.outerHTML;
 
   const bg = showBackground ? `<rect width="100%" height="100%" fill="white"/>` : '';
 
-  const layerSvg = `<svg viewBox="${viewBox}" xmlns="${xmlns}">${defs}${bg}${layerContent}</svg>`;
+  const layerSvg = `<svg viewBox="${viewBox}" xmlns="${xmlns}">${defsHtml}${bg}${layerHtml}</svg>`;
   return renderSvgToPng(layerSvg, width, height);
 }

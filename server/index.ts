@@ -615,11 +615,11 @@ app.post('/api/svg/:drawId/composition/critique', async (req: Request, res: Resp
 
 // --- Preview & BBox API ---
 app.post('/api/svg/:drawId/preview', async (req: Request, res: Response) => {
-  const { width, height } = req.body as any;
+  const { width, height, background, dpi } = req.body as any;
   const drawing = await drawingStore.get(req.params.drawId as string);
   if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
   try {
-    const png = renderSvgToPng(drawing.svgContent, width || 800, height);
+    const png = renderSvgToPng(drawing.svgContent, width || 800, height, background, dpi);
     res.json({ image: png.toString('base64') });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

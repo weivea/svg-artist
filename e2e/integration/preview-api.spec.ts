@@ -67,4 +67,51 @@ test.describe('Preview & BBox API', () => {
     });
     expect(res.status()).toBe(404);
   });
+
+  test('preview with background color produces valid PNG', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/preview`, {
+      data: { background: '#ffffff' },
+    });
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect(body.image).toBeTruthy();
+    const buf = Buffer.from(body.image, 'base64');
+    expect(buf[0]).toBe(0x89); // PNG magic
+    expect(buf[1]).toBe(0x50);
+  });
+
+  test('preview with DPI scales render', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    // Get baseline image at default DPI
+    const baseRes = await apiContext.post(`/api/svg/${drawId}/preview`, {
+      data: { width: 400 },
+    });
+    const baseBody = await baseRes.json();
+    const baseSize = Buffer.from(baseBody.image, 'base64').length;
+
+    // Get image at 2x DPI (should produce larger PNG)
+    const hiRes = await apiContext.post(`/api/svg/${drawId}/preview`, {
+      data: { dpi: 144 },
+    });
+    expect(hiRes.ok()).toBeTruthy();
+    const hiBody = await hiRes.json();
+    expect(hiBody.image).toBeTruthy();
+    const hiBuf = Buffer.from(hiBody.image, 'base64');
+    expect(hiBuf[0]).toBe(0x89); // PNG magic
+    // 2x DPI should produce a larger image than 400px width
+    expect(hiBuf.length).toBeGreaterThan(baseSize);
+  });
+
+  test('preview with background and DPI combined', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/preview`, {
+      data: { background: '#000000', dpi: 144, width: 400 },
+    });
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect(body.image).toBeTruthy();
+    const buf = Buffer.from(body.image, 'base64');
+    expect(buf[0]).toBe(0x89);
+  });
 });

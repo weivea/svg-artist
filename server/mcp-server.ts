@@ -349,10 +349,12 @@ server.tool(
 
 server.tool(
   'preview_as_png',
-  'Render the entire canvas as PNG for visual self-review',
+  'Render the entire canvas as PNG for visual self-review. Supports background color and DPI control.',
   {
     width: z.number().optional().describe('Output image width in pixels'),
     height: z.number().optional().describe('Output image height in pixels'),
+    background: z.string().optional().describe('Background color (CSS3 format, e.g. "#ffffff", "rgba(0,0,0,0.5)"). Default: transparent'),
+    dpi: z.number().optional().describe('Render DPI (default 72). Higher values produce larger images (e.g. 144 = 2x).'),
   },
   async (params) => imageTool('preview', params),
 );

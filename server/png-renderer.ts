@@ -3,11 +3,30 @@ import { parseHTML } from 'linkedom';
 
 /**
  * Render an SVG string to a PNG buffer.
+ * @param background - Optional CSS color string for background (e.g. "#ffffff", "rgba(0,0,0,0.5)")
+ * @param dpi - Optional DPI value (default 72). Higher DPI scales the render dimensions.
  */
-export function renderSvgToPng(svgString: string, width?: number, height?: number): Buffer {
+export function renderSvgToPng(
+  svgString: string,
+  width?: number,
+  height?: number,
+  background?: string,
+  dpi?: number,
+): Buffer {
   const opts: any = {};
   if (width) {
     opts.fitTo = { mode: 'width' as const, value: width };
+  }
+  if (background) {
+    opts.background = background;
+  }
+  if (dpi && dpi !== 72) {
+    opts.dpi = dpi;
+    // If no explicit fitTo width, scale the render based on DPI
+    if (!width) {
+      const scale = dpi / 72;
+      opts.fitTo = { mode: 'zoom' as const, value: scale };
+    }
   }
 
   const resvg = new Resvg(svgString, opts);

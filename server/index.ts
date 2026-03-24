@@ -312,12 +312,12 @@ app.post('/api/svg/:drawId/layers/duplicate', async (req: Request, res: Response
 });
 
 app.post('/api/svg/:drawId/layers/transform', async (req: Request, res: Response) => {
-  const { layer_id, translate, scale, rotate } = req.body as any;
+  const { layer_id, translate, scale, rotate, skew, mode } = req.body as any;
   if (!layer_id) { res.status(400).json({ error: 'Missing layer_id' }); return; }
   const drawing = await drawingStore.get(req.params.drawId as string);
   if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
   const engine = new SvgEngine(drawing.svgContent);
-  if (!engine.transformLayer(layer_id, { translate, scale, rotate })) {
+  if (!engine.transformLayer(layer_id, { translate, scale, rotate, skew, mode })) {
     res.status(404).json({ error: 'Layer not found' }); return;
   }
   const newSvg = engine.serialize();

@@ -183,7 +183,7 @@ server.tool(
 
 server.tool(
   'transform_layer',
-  'Apply translate, scale, or rotate transform to a layer without rewriting content',
+  'Apply translate, scale, rotate, or skew transform to a layer. Default mode is compose (appends to existing transforms). Use replace to overwrite.',
   {
     layer_id: z.string().describe('The layer id to transform'),
     translate: z.object({
@@ -193,12 +193,19 @@ server.tool(
     scale: z.object({
       x: z.number(),
       y: z.number(),
-    }).optional().describe('Scale factors'),
+      cx: z.number().optional(),
+      cy: z.number().optional(),
+    }).optional().describe('Scale factors with optional center point'),
     rotate: z.object({
       angle: z.number(),
       cx: z.number().optional(),
       cy: z.number().optional(),
     }).optional().describe('Rotation in degrees, optionally around a center point'),
+    skew: z.object({
+      x: z.number().optional(),
+      y: z.number().optional(),
+    }).optional().describe('Skew angles in degrees for x and/or y axis'),
+    mode: z.enum(['compose', 'replace']).optional().describe('compose (default): append to existing transforms. replace: overwrite.'),
   },
   async (params) => textTool('layers/transform', params),
 );

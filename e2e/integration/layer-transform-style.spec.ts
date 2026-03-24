@@ -33,6 +33,57 @@ test.describe('Layer API — Transform & Style', () => {
     expect(svg).toContain('rotate(45');
   });
 
+  test('transform_layer compose mode appends to existing transform', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    await apiContext.post(`/api/svg/${drawId}/layers/transform`, {
+      data: { layer_id: 'layer-sun', translate: { x: 10, y: 20 } },
+    });
+    await apiContext.post(`/api/svg/${drawId}/layers/transform`, {
+      data: { layer_id: 'layer-sun', rotate: { angle: 45 }, mode: 'compose' },
+    });
+    const source = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const body = await source.json();
+    expect(body.svg).toContain('translate(10, 20)');
+    expect(body.svg).toMatch(/rotate\(45\)/);
+  });
+
+  test('transform_layer replace mode overwrites existing transform', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    await apiContext.post(`/api/svg/${drawId}/layers/transform`, {
+      data: { layer_id: 'layer-sun', translate: { x: 10, y: 20 } },
+    });
+    await apiContext.post(`/api/svg/${drawId}/layers/transform`, {
+      data: { layer_id: 'layer-sun', rotate: { angle: 45 }, mode: 'replace' },
+    });
+    const source = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const body = await source.json();
+    expect(body.svg).not.toContain('translate(10, 20)');
+    expect(body.svg).toMatch(/rotate\(45\)/);
+  });
+
+  test('transform_layer supports skew', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    await apiContext.post(`/api/svg/${drawId}/layers/transform`, {
+      data: { layer_id: 'layer-sun', skew: { x: 15, y: 10 } },
+    });
+    const source = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const body = await source.json();
+    expect(body.svg).toContain('skewX(15)');
+    expect(body.svg).toContain('skewY(10)');
+  });
+
+  test('transform_layer scale with center point', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    await apiContext.post(`/api/svg/${drawId}/layers/transform`, {
+      data: { layer_id: 'layer-sun', scale: { x: 2, y: 2, cx: 650, cy: 100 } },
+    });
+    const source = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const body = await source.json();
+    expect(body.svg).toContain('translate(650, 100)');
+    expect(body.svg).toContain('scale(2, 2)');
+    expect(body.svg).toContain('translate(-650, -100)');
+  });
+
   test('set_layer_opacity sets opacity attribute', async ({ apiContext }) => {
     const drawId = await setupLayeredDrawing(apiContext);
     const res = await apiContext.post(`/api/svg/${drawId}/layers/opacity`, {

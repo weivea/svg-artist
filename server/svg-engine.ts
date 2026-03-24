@@ -262,23 +262,49 @@ export class SvgEngine {
   /** Apply transform to a layer */
   transformLayer(layerId: string, opts: {
     translate?: { x: number; y: number };
-    scale?: { x: number; y: number };
+    scale?: { x: number; y: number; cx?: number; cy?: number };
     rotate?: { angle: number; cx?: number; cy?: number };
+    skew?: { x?: number; y?: number };
+    mode?: 'compose' | 'replace';
   }): boolean {
     const g = this._findLayerElement(layerId);
     if (!g) return false;
 
     const parts: string[] = [];
-    if (opts.translate) parts.push(`translate(${opts.translate.x}, ${opts.translate.y})`);
-    if (opts.scale) parts.push(`scale(${opts.scale.x}, ${opts.scale.y})`);
+    if (opts.translate) {
+      parts.push(`translate(${opts.translate.x}, ${opts.translate.y})`);
+    }
+    if (opts.scale) {
+      const { x, y, cx, cy } = opts.scale;
+      if (cx !== undefined && cy !== undefined) {
+        parts.push(`translate(${cx}, ${cy})`);
+        parts.push(`scale(${x}, ${y})`);
+        parts.push(`translate(${-cx}, ${-cy})`);
+      } else {
+        parts.push(`scale(${x}, ${y})`);
+      }
+    }
     if (opts.rotate) {
       const { angle, cx, cy } = opts.rotate;
-      parts.push(cx !== undefined && cy !== undefined ? `rotate(${angle}, ${cx}, ${cy})` : `rotate(${angle})`);
+      parts.push(cx !== undefined && cy !== undefined
+        ? `rotate(${angle}, ${cx}, ${cy})`
+        : `rotate(${angle})`);
+    }
+    if (opts.skew) {
+      if (opts.skew.x !== undefined) parts.push(`skewX(${opts.skew.x})`);
+      if (opts.skew.y !== undefined) parts.push(`skewY(${opts.skew.y})`);
     }
 
     if (parts.length === 0) return true; // no-op
 
-    g.setAttribute('transform', parts.join(' '));
+    const mode = opts.mode || 'compose';
+    if (mode === 'compose') {
+      const existing = g.getAttribute('transform') || '';
+      const combined = existing ? `${existing} ${parts.join(' ')}` : parts.join(' ');
+      g.setAttribute('transform', combined);
+    } else {
+      g.setAttribute('transform', parts.join(' '));
+    }
     return true;
   }
 

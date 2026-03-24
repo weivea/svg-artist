@@ -87,4 +87,33 @@ test.describe('Layer API — Query Operations', () => {
     expect(hexColors).toContain('#00ff00');
     expect(hexColors).toContain('#0000ff');
   });
+
+  test('canvas info returns enhanced layer details', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/canvas/info`);
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect(body.width).toBe(800);
+    expect(body.height).toBe(800);
+    expect(body.layers).toBeInstanceOf(Array);
+    expect(body.layers.length).toBeGreaterThan(0);
+    const bgLayer = body.layers.find((l: any) => l.id === 'layer-bg');
+    expect(bgLayer).toBeTruthy();
+    expect(bgLayer.visible).toBe(true);
+    expect(bgLayer.name).toBe('背景');
+  });
+
+  test('list_layers returns visibility and opacity', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    await apiContext.post(`/api/svg/${drawId}/layers/opacity`, {
+      data: { layer_id: 'layer-sun', opacity: 0.5 },
+    });
+    const res = await apiContext.post(`/api/svg/${drawId}/layers/list`);
+    const body = await res.json();
+    const sun = body.layers.find((l: any) => l.id === 'layer-sun');
+    expect(sun.opacity).toBe(0.5);
+    expect(sun.visible).toBe(true);
+    expect(sun.hasTransform).toBe(false);
+    expect(sun.hasFilter).toBe(false);
+  });
 });

@@ -415,6 +415,65 @@ server.tool(
     textTool('path/create', { ...spec, fill, stroke, stroke_width, layer_id, layer_name }),
 );
 
+server.tool(
+  'edit_path',
+  `Edit an existing path element's geometry. Operations are applied in sequence:
+- move_point: Move a point to new coordinates (index, x, y)
+- add_point: Insert a new L point after an existing one (after_index, x, y)
+- delete_point: Remove a point by index (minimum 2 points preserved)
+- set_control: Set/change control points to create curves (index, control1?, control2?)
+- close: Add Z to close the path
+- open: Remove closing Z command
+Use path/find to get the element_id of a path inside a layer.`,
+  {
+    element_id: z.string().describe('The id attribute of the <path> element to edit'),
+    operations: z.array(z.discriminatedUnion('type', [
+      z.object({
+        type: z.literal('move_point'),
+        index: z.number().describe('Index of the point to move (0-based)'),
+        x: z.number().describe('New x coordinate'),
+        y: z.number().describe('New y coordinate'),
+      }),
+      z.object({
+        type: z.literal('add_point'),
+        after_index: z.number().describe('Insert new point after this index'),
+        x: z.number().describe('X coordinate of the new point'),
+        y: z.number().describe('Y coordinate of the new point'),
+      }),
+      z.object({
+        type: z.literal('delete_point'),
+        index: z.number().describe('Index of the point to delete'),
+      }),
+      z.object({
+        type: z.literal('set_control'),
+        index: z.number().describe('Index of the point to modify'),
+        control1: z.tuple([z.number(), z.number()]).optional().describe('First control point [x, y] (creates Q curve)'),
+        control2: z.tuple([z.number(), z.number()]).optional().describe('Second control point [x, y] (creates C curve)'),
+      }),
+      z.object({ type: z.literal('close') }),
+      z.object({ type: z.literal('open') }),
+    ])).describe('Array of edit operations to apply in order'),
+  },
+  async (params) => textTool('path/edit', params),
+);
+
+server.tool(
+  'boolean_path',
+  `Perform a boolean operation on two path elements, creating a new path with the result.
+- union: Combine both shapes into one
+- subtract: Remove path_b's shape from path_a
+- intersect: Keep only the overlapping area
+- exclude: Keep everything except the overlapping area
+Uses path element ids (find them with path/find). Result is placed in a new layer.`,
+  {
+    operation: z.enum(['union', 'subtract', 'intersect', 'exclude']).describe('Boolean operation to perform'),
+    path_a: z.string().describe('Element id of the first <path>'),
+    path_b: z.string().describe('Element id of the second <path>'),
+    result_layer: z.string().optional().describe('Name for the result layer (auto-generated if omitted)'),
+  },
+  async (params) => textTool('path/boolean', params),
+);
+
 // ---------------------------------------------------------------------------
 // Professional Tools (4)
 // ---------------------------------------------------------------------------

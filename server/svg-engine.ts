@@ -2,7 +2,7 @@ import { parseHTML } from 'linkedom';
 import { generateFilter, FilterType, FilterParams, extractFilterPrimitives, randomSuffix } from './filter-templates.js';
 import { getPresetRules, StylePreset } from './style-presets.js';
 import { buildTextElement, TextOptions } from './typography.js';
-import { buildPathSvg, PathSpec } from './path-operations.js';
+import { buildPathSvg, PathSpec, applyPathEdits, PathEditOp, booleanPathOp, BooleanOp } from './path-operations.js';
 
 export interface BBox {
   x: number;
@@ -1086,6 +1086,74 @@ export class SvgEngine {
     const layerId = this.addLayer(name, pathSvg);
     if (!layerId) return { ok: false, error: 'Failed to create layer' };
     return { ok: true, layer_id: layerId };
+  }
+
+  /** Edit a path element's d attribute by applying a sequence of edit operations. */
+  editPathElement(elementId: string, operations: PathEditOp[]): { ok: boolean; newD?: string; error?: string } {
+    // Search for element by id across entire SVG (all layers)
+    const el = this.svgElement.querySelector(`[id="${elementId}"]`);
+    if (!el) return { ok: false, error: `Element not found: ${elementId}` };
+    if (el.tagName.toLowerCase() !== 'path') return { ok: false, error: `Element is not a <path>: ${el.tagName}` };
+
+    const d = el.getAttribute('d');
+    if (!d) return { ok: false, error: 'Path element has no d attribute' };
+
+    const newD = applyPathEdits(d, operations);
+    el.setAttribute('d', newD);
+    return { ok: true, newD };
+  }
+
+  /** Find a path element within a layer by layer id (returns first <path> child). */
+  findPathInLayer(layerId: string): string | null {
+    const layer = this._findLayerElement(layerId);
+    if (!layer) return null;
+    const path = layer.querySelector('path');
+    if (!path) return null;
+    return path.getAttribute('id') || null;
+  }
+
+  /** Perform a boolean path operation between two path elements, placing result in a new layer. */
+  booleanPath(
+    pathAId: string,
+    pathBId: string,
+    operation: BooleanOp,
+    resultLayerName?: string,
+  ): { ok: boolean; layer_id?: string; resultD?: string; error?: string } {
+    const elA = this.svgElement.querySelector(`[id="${pathAId}"]`);
+    if (!elA) return { ok: false, error: `Path A not found: ${pathAId}` };
+    if (elA.tagName.toLowerCase() !== 'path') return { ok: false, error: `Element A is not a <path>: ${elA.tagName}` };
+
+    const elB = this.svgElement.querySelector(`[id="${pathBId}"]`);
+    if (!elB) return { ok: false, error: `Path B not found: ${pathBId}` };
+    if (elB.tagName.toLowerCase() !== 'path') return { ok: false, error: `Element B is not a <path>: ${elB.tagName}` };
+
+    const dA = elA.getAttribute('d');
+    const dB = elB.getAttribute('d');
+    if (!dA || !dB) return { ok: false, error: 'One or both paths have no d attribute' };
+
+    const result = booleanPathOp(dA, dB, operation);
+    if (!result.ok) return { ok: false, error: result.error };
+
+    // Inherit style from path A for the result
+    const fill = elA.getAttribute('fill') || 'none';
+    const stroke = elA.getAttribute('stroke') || '#000000';
+    const strokeWidth = elA.getAttribute('stroke-width') || '';
+
+    const resultId = `path-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const styleAttrs = [
+      `id="${resultId}"`,
+      `d="${result.resultD}"`,
+      `fill="${fill}"`,
+      `stroke="${stroke}"`,
+    ];
+    if (strokeWidth) styleAttrs.push(`stroke-width="${strokeWidth}"`);
+
+    const pathSvg = `<path ${styleAttrs.join(' ')}/>`;
+    const layerName = resultLayerName || `boolean-${operation}-${Date.now().toString(36)}`;
+    const layerId = this.addLayer(layerName, pathSvg);
+    if (!layerId) return { ok: false, error: 'Failed to create result layer' };
+
+    return { ok: true, layer_id: layerId, resultD: result.resultD };
   }
 
   private _elementBBox(el: LElement): BBox | null {

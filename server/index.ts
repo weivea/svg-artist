@@ -492,6 +492,61 @@ app.post('/api/svg/:drawId/path/create', async (req: Request, res: Response) => 
   res.json({ ok: true, layer_id: result.layer_id });
 });
 
+app.post('/api/svg/:drawId/path/edit', async (req: Request, res: Response) => {
+  const drawId = req.params.drawId as string;
+  const { element_id, operations } = req.body as { element_id?: string; operations?: any[] };
+  if (!element_id || !operations || !Array.isArray(operations)) {
+    res.status(400).json({ error: 'Missing element_id or operations array' }); return;
+  }
+  const drawing = await drawingStore.get(drawId);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const engine = new SvgEngine(drawing.svgContent);
+  const result = engine.editPathElement(element_id, operations);
+  if (!result.ok) { res.status(400).json({ error: result.error }); return; }
+  const svg = engine.serialize();
+  await drawingStore.updateSvg(drawId, svg);
+  broadcastSvg(drawId, svg);
+  res.json({ ok: true, newD: result.newD });
+});
+
+app.post('/api/svg/:drawId/path/find', async (req: Request, res: Response) => {
+  const drawId = req.params.drawId as string;
+  const { layer_id } = req.body as { layer_id?: string };
+  if (!layer_id) { res.status(400).json({ error: 'Missing layer_id' }); return; }
+  const drawing = await drawingStore.get(drawId);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const engine = new SvgEngine(drawing.svgContent);
+  const pathId = engine.findPathInLayer(layer_id);
+  if (!pathId) { res.status(404).json({ error: 'No path found in layer' }); return; }
+  res.json({ ok: true, path_id: pathId });
+});
+
+app.post('/api/svg/:drawId/path/boolean', async (req: Request, res: Response) => {
+  const drawId = req.params.drawId as string;
+  const { operation, path_a, path_b, result_layer } = req.body as {
+    operation?: string;
+    path_a?: string;
+    path_b?: string;
+    result_layer?: string;
+  };
+  if (!operation || !path_a || !path_b) {
+    res.status(400).json({ error: 'Missing operation, path_a, or path_b' }); return;
+  }
+  const validOps = ['union', 'subtract', 'intersect', 'exclude'];
+  if (!validOps.includes(operation)) {
+    res.status(400).json({ error: `Invalid operation: ${operation}. Must be one of: ${validOps.join(', ')}` }); return;
+  }
+  const drawing = await drawingStore.get(drawId);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const engine = new SvgEngine(drawing.svgContent);
+  const result = engine.booleanPath(path_a, path_b, operation as any, result_layer);
+  if (!result.ok) { res.status(400).json({ error: result.error }); return; }
+  const svg = engine.serialize();
+  await drawingStore.updateSvg(drawId, svg);
+  broadcastSvg(drawId, svg);
+  res.json({ ok: true, layer_id: result.layer_id, resultD: result.resultD });
+});
+
 app.post('/api/svg/:drawId/filter/apply', async (req: Request, res: Response) => {
   const { layer_id, filter_type, params } = req.body as { layer_id?: string; filter_type?: string; params?: FilterParams };
   if (!layer_id || !filter_type) { res.status(400).json({ error: 'Missing layer_id or filter_type' }); return; }

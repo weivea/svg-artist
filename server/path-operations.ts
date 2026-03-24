@@ -81,7 +81,8 @@ export function buildPathSvg(spec: PathSpec, style?: {
   const d = buildPathD(spec);
   if (!d) return '';
 
-  const attrs: string[] = [`d="${d}"`];
+  const pathId = `path-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  const attrs: string[] = [`id="${pathId}"`, `d="${d}"`];
   if (style?.fill !== undefined) attrs.push(`fill="${style.fill}"`);
   else attrs.push('fill="none"');
   if (style?.stroke) attrs.push(`stroke="${style.stroke}"`);
@@ -89,4 +90,159 @@ export function buildPathSvg(spec: PathSpec, style?: {
   if (style?.stroke_width) attrs.push(`stroke-width="${style.stroke_width}"`);
 
   return `<path ${attrs.join(' ')}/>`;
+}
+
+// ---------------------------------------------------------------------------
+// Path Editing
+// ---------------------------------------------------------------------------
+
+export interface PathPoint {
+  command: string;
+  x: number;
+  y: number;
+  control1?: [number, number];
+  control2?: [number, number];
+}
+
+export function parsePath(d: string): PathPoint[] {
+  const points: PathPoint[] = [];
+  const commands = d.match(/[MLHVCSQTAZ][^MLHVCSQTAZ]*/gi) || [];
+  let cx = 0, cy = 0;
+  for (const cmd of commands) {
+    const type = cmd[0];
+    const nums = cmd.slice(1).trim().split(/[\s,]+/).map(Number).filter((n) => !isNaN(n));
+    switch (type.toUpperCase()) {
+      case 'M': cx = nums[0]; cy = nums[1]; points.push({ command: 'M', x: cx, y: cy }); break;
+      case 'L': cx = nums[0]; cy = nums[1]; points.push({ command: 'L', x: cx, y: cy }); break;
+      case 'H': cx = nums[0]; points.push({ command: 'L', x: cx, y: cy }); break;
+      case 'V': cy = nums[0]; points.push({ command: 'L', x: cx, y: cy }); break;
+      case 'C':
+        cx = nums[4]; cy = nums[5];
+        points.push({ command: 'C', x: cx, y: cy, control1: [nums[0], nums[1]], control2: [nums[2], nums[3]] });
+        break;
+      case 'Q':
+        cx = nums[2]; cy = nums[3];
+        points.push({ command: 'Q', x: cx, y: cy, control1: [nums[0], nums[1]] });
+        break;
+      case 'Z': points.push({ command: 'Z', x: cx, y: cy }); break;
+      default: break;
+    }
+  }
+  return points;
+}
+
+export function serializePath(points: PathPoint[]): string {
+  return points.map((p) => {
+    switch (p.command) {
+      case 'M': return `M ${p.x} ${p.y}`;
+      case 'L': return `L ${p.x} ${p.y}`;
+      case 'C': return `C ${p.control1![0]} ${p.control1![1]}, ${p.control2![0]} ${p.control2![1]}, ${p.x} ${p.y}`;
+      case 'Q': return `Q ${p.control1![0]} ${p.control1![1]}, ${p.x} ${p.y}`;
+      case 'Z': return 'Z';
+      default: return '';
+    }
+  }).join(' ');
+}
+
+export type PathEditOp =
+  | { type: 'move_point'; index: number; x: number; y: number }
+  | { type: 'add_point'; after_index: number; x: number; y: number }
+  | { type: 'delete_point'; index: number }
+  | { type: 'set_control'; index: number; control1?: [number, number]; control2?: [number, number] }
+  | { type: 'close' }
+  | { type: 'open' };
+
+export function applyPathEdits(d: string, operations: PathEditOp[]): string {
+  const points = parsePath(d);
+  for (const op of operations) {
+    switch (op.type) {
+      case 'move_point':
+        if (op.index >= 0 && op.index < points.length) {
+          points[op.index].x = op.x;
+          points[op.index].y = op.y;
+        }
+        break;
+      case 'add_point':
+        if (op.after_index >= 0 && op.after_index < points.length) {
+          points.splice(op.after_index + 1, 0, { command: 'L', x: op.x, y: op.y });
+        }
+        break;
+      case 'delete_point':
+        if (op.index >= 0 && op.index < points.length && points.length > 2) {
+          points.splice(op.index, 1);
+        }
+        break;
+      case 'set_control':
+        if (op.index >= 0 && op.index < points.length) {
+          if (op.control1) {
+            points[op.index].control1 = op.control1;
+            if (!points[op.index].control2) {
+              points[op.index].command = 'Q';
+            }
+          }
+          if (op.control2) {
+            points[op.index].control2 = op.control2;
+            points[op.index].command = 'C';
+          }
+        }
+        break;
+      case 'close':
+        if (points.length > 0 && points[points.length - 1].command !== 'Z') {
+          points.push({ command: 'Z', x: points[0].x, y: points[0].y });
+        }
+        break;
+      case 'open':
+        if (points.length > 0 && points[points.length - 1].command === 'Z') {
+          points.pop();
+        }
+        break;
+    }
+  }
+  return serializePath(points);
+}
+
+// ---------------------------------------------------------------------------
+// Boolean Path Operations (via path-bool)
+// ---------------------------------------------------------------------------
+
+import {
+  pathFromPathData,
+  pathToPathData,
+  pathBoolean,
+  PathBooleanOperation,
+  FillRule,
+} from 'path-bool';
+
+export type BooleanOp = 'union' | 'subtract' | 'intersect' | 'exclude';
+
+const BOOLEAN_OP_MAP: Record<BooleanOp, PathBooleanOperation> = {
+  union: PathBooleanOperation.Union,
+  subtract: PathBooleanOperation.Difference,
+  intersect: PathBooleanOperation.Intersection,
+  exclude: PathBooleanOperation.Exclusion,
+};
+
+export function booleanPathOp(
+  dA: string,
+  dB: string,
+  operation: BooleanOp,
+): { ok: boolean; resultD?: string; error?: string } {
+  try {
+    const pathA = pathFromPathData(dA);
+    const pathB = pathFromPathData(dB);
+    const op = BOOLEAN_OP_MAP[operation];
+    if (op === undefined) {
+      return { ok: false, error: `Unknown operation: ${operation}` };
+    }
+    const results = pathBoolean(pathA, FillRule.NonZero, pathB, FillRule.NonZero, op);
+    if (results.length === 0) {
+      return { ok: true, resultD: '' };
+    }
+    // Combine multiple result paths into a single d string
+    const resultD = results.map(pathToPathData).join(' ');
+    return { ok: true, resultD };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: `Boolean operation failed: ${msg}` };
+  }
 }

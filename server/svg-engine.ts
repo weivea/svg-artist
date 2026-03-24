@@ -66,11 +66,23 @@ export class SvgEngine {
     return el.tagName.toLowerCase() === 'g' && !!el.id && el.id.startsWith('layer-');
   }
 
+  /** Parse the SVG viewBox attribute into structured components. */
+  private _parseViewBox(): { x: number; y: number; width: number; height: number } {
+    const vb = this.svgElement.getAttribute('viewBox') || '0 0 800 800';
+    const parts = vb.split(/\s+/).map(Number);
+    return {
+      x: parts[0] || 0,
+      y: parts[1] || 0,
+      width: parts[2] || 800,
+      height: parts[3] || 800,
+    };
+  }
+
   getCanvasInfo(): CanvasInfo {
+    const vb = this._parseViewBox();
     const viewBox = this.svgElement.getAttribute('viewBox') || '0 0 800 800';
-    const vbParts = viewBox.split(/\s+/).map(Number);
-    const width = vbParts[2] || 800;
-    const height = vbParts[3] || 800;
+    const width = vb.width;
+    const height = vb.height;
 
     const allElements = this.svgElement.querySelectorAll('*');
     const defs = this.svgElement.querySelector('defs');
@@ -884,11 +896,10 @@ export class SvgEngine {
     gradient_id?: string;
     opacity?: number;
   }): boolean {
-    const viewBox = this.svgElement.getAttribute('viewBox') || '0 0 800 800';
-    const parts = viewBox.split(/\s+/).map(Number);
-    const [vbX, vbY, vbW, vbH] = [parts[0] || 0, parts[1] || 0, parts[2] || 800, parts[3] || 800];
+    const { x: vbX, y: vbY, width: vbW, height: vbH } = this._parseViewBox();
 
     let bgRect = this.svgElement.querySelector('#canvas-bg');
+    const isUpdate = !!bgRect;
     if (!bgRect) {
       bgRect = this.document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       bgRect.setAttribute('id', 'canvas-bg');
@@ -909,7 +920,12 @@ export class SvgEngine {
 
     if (opts.color) bgRect.setAttribute('fill', opts.color);
     if (opts.gradient_id) bgRect.setAttribute('fill', `url(#${opts.gradient_id})`);
-    if (opts.opacity !== undefined) bgRect.setAttribute('opacity', String(opts.opacity));
+    // On update, clear stale opacity if not provided
+    if (opts.opacity !== undefined) {
+      bgRect.setAttribute('opacity', String(opts.opacity));
+    } else if (isUpdate) {
+      bgRect.removeAttribute('opacity');
+    }
 
     return true;
   }
@@ -939,13 +955,15 @@ export class SvgEngine {
       refBbox = ref;
     } else {
       // Default: use canvas viewBox as reference
-      const vb = this.svgElement.getAttribute('viewBox') || '0 0 800 800';
-      const parts = vb.split(/\s+/).map(Number);
-      refBbox = { x: parts[0] || 0, y: parts[1] || 0, width: parts[2] || 800, height: parts[3] || 800 };
+      const vb = this._parseViewBox();
+      refBbox = { x: vb.x, y: vb.y, width: vb.width, height: vb.height };
     }
 
     // Determine which layer ID is the reference (should not be moved)
     const referenceId = (opts.reference && opts.reference !== 'canvas') ? opts.reference : null;
+
+    // Track deltas applied during align so we can adjust bboxes for distribute
+    const alignDeltas = new Map<string, { dx: number; dy: number }>();
 
     // Align
     if (opts.align) {
@@ -964,12 +982,29 @@ export class SvgEngine {
         }
         if (dx !== 0 || dy !== 0) {
           this.transformLayer(item.id, { translate: { x: dx, y: dy }, mode: 'compose' });
+          alignDeltas.set(item.id, { dx, dy });
         }
       }
     }
 
     // Distribute
     if (opts.distribute) {
+      // If align was also applied, adjust bboxes with the deltas from alignment
+      // since getElementBBox reads raw attributes and doesn't account for transforms
+      if (opts.align && alignDeltas.size > 0) {
+        for (const item of bboxes) {
+          const delta = alignDeltas.get(item.id);
+          if (delta) {
+            item.bbox = {
+              x: item.bbox.x + delta.dx,
+              y: item.bbox.y + delta.dy,
+              width: item.bbox.width,
+              height: item.bbox.height,
+            };
+          }
+        }
+      }
+
       const sorted = [...bboxes].sort((a, b) =>
         opts.distribute === 'horizontal' ? a.bbox.x - b.bbox.x : a.bbox.y - b.bbox.y,
       );

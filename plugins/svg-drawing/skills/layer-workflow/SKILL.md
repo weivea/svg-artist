@@ -109,28 +109,38 @@ Always build a scene from back to front. This ensures:
 ### Recommended Workflow
 
 ```
+Phase 0: Research & Design (for non-trivial drawings)
+  → Dispatch design-advisor agent for visual reference research
+  → Select from 2-3 proposed approaches
+  → Lock in palette, composition strategy, and layer plan
+
 Phase 1: Foundation
   1. Set up the canvas (viewBox dimensions)
   2. Define shared resources (gradients, patterns) using manage_defs
   3. Draw the background (sky, base color)
+  4. preview_as_png → Confirm foundation
 
-Phase 2: Environment
-  4. Add distant elements (mountains, horizon)
-  5. Add midground elements (hills, water)
-  6. Add ground/terrain
+Phase 2: Construction (build back to front)
+  5. Add distant elements (mountains, horizon)
+  6. Add midground elements (hills, water)
+  7. Add ground/terrain
+  8. Add main subjects (buildings, trees, characters)
+  9. Add shadows for subjects
+  10. Add secondary subjects
+  Mark areas needing fine detail for Phase 3
 
-Phase 3: Subjects
-  7. Add main subjects (buildings, trees, characters)
-  8. Add shadows for subjects
-  9. Add secondary subjects
-
-Phase 4: Details
-  10. Add small details (flowers, textures, facial features)
-  11. Add lighting effects
+Phase 3: Detail & Polish
+  → Dispatch detail-painter agent for fine details (faces, hands, hair, textures)
+  → Review scratch canvas results, merge into main drawing
+  11. Apply filters and effects
   12. Add atmospheric effects (fog, vignette)
+  13. preview_as_png → Full visual review
 
-Phase 5: Review
-  13. Preview → analyze → fix → preview again
+Phase 4: Critique & Evolve
+  14. preview_as_png → 7-dimension self-critique
+  → Dispatch bootstrap-reviewer agent for self-improvement analysis
+  15. Fix issues, implement improvements
+  16. Final preview → Confirm artwork is great
 ```
 
 ## Self-Review Workflow

@@ -944,9 +944,15 @@ export class SvgEngine {
       refBbox = { x: parts[0] || 0, y: parts[1] || 0, width: parts[2] || 800, height: parts[3] || 800 };
     }
 
+    // Determine which layer ID is the reference (should not be moved)
+    const referenceId = (opts.reference && opts.reference !== 'canvas') ? opts.reference : null;
+
     // Align
     if (opts.align) {
       for (const item of bboxes) {
+        // Skip the reference layer — it defines the target, not a layer to move
+        if (referenceId && item.id === referenceId) continue;
+
         let dx = 0, dy = 0;
         switch (opts.align) {
           case 'left': dx = refBbox.x - item.bbox.x; break;
@@ -982,6 +988,11 @@ export class SvgEngine {
           const item = sorted[i];
           const currentPos = isHoriz ? item.bbox.x : item.bbox.y;
           const delta = pos - currentPos;
+          // Skip the reference layer — don't move it
+          if (referenceId && item.id === referenceId) {
+            pos += (isHoriz ? item.bbox.width : item.bbox.height) + gap;
+            continue;
+          }
           if (Math.abs(delta) > 0.01) {
             const translate = isHoriz ? { x: delta, y: 0 } : { x: 0, y: delta };
             this.transformLayer(item.id, { translate, mode: 'compose' });

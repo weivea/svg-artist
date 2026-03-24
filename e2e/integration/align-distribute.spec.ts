@@ -14,7 +14,7 @@ test.describe('Align & Distribute API', () => {
     return drawing.id;
   }
 
-  test('align layers to left', async ({ apiContext }) => {
+  test('align layers to left with concrete translate values', async ({ apiContext }) => {
     const drawId = await setup(apiContext);
     const res = await apiContext.post(`/api/svg/${drawId}/align`, {
       data: {
@@ -23,11 +23,15 @@ test.describe('Align & Distribute API', () => {
       },
     });
     expect(res.ok()).toBeTruthy();
-    // After left-align, all layers should start at x=50 (the leftmost)
+    // Aligning left to canvas (viewBox 0 0 800 800), refBbox.x = 0
+    // Layer A: bbox.x=50 → dx = 0 - 50 = -50
+    // Layer B: bbox.x=200 → dx = 0 - 200 = -200
+    // Layer C: bbox.x=400 → dx = 0 - 400 = -400
     const source = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
     const body = await source.json();
-    // All layers should have been translated
-    expect(body.svg).toContain('translate');
+    expect(body.svg).toContain('translate(-50, 0)');
+    expect(body.svg).toContain('translate(-200, 0)');
+    expect(body.svg).toContain('translate(-400, 0)');
   });
 
   test('align layers to right', async ({ apiContext }) => {
@@ -103,7 +107,7 @@ test.describe('Align & Distribute API', () => {
     expect(res.status()).toBe(400);
   });
 
-  test('align with reference layer', async ({ apiContext }) => {
+  test('align with reference layer does not move the reference', async ({ apiContext }) => {
     const drawId = await setup(apiContext);
     const res = await apiContext.post(`/api/svg/${drawId}/align`, {
       data: {
@@ -113,5 +117,39 @@ test.describe('Align & Distribute API', () => {
       },
     });
     expect(res.ok()).toBeTruthy();
+    const source = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const body = await source.json();
+    // Reference is layer-b at x=200. Other layers align to x=200.
+    // Layer A: dx = 200 - 50 = 150
+    // Layer C: dx = 200 - 400 = -200
+    // Layer B (the reference) should NOT have a transform applied
+    expect(body.svg).toContain('translate(150, 0)');
+    expect(body.svg).toContain('translate(-200, 0)');
+    // Verify layer-b has no transform attribute
+    const layerBMatch = body.svg.match(/<g[^>]*id="layer-b"[^>]*>/);
+    expect(layerBMatch).toBeTruthy();
+    expect(layerBMatch[0]).not.toContain('transform');
+  });
+
+  test('align and distribute combined in one call', async ({ apiContext }) => {
+    const drawId = await setup(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/align`, {
+      data: {
+        layer_ids: ['layer-a', 'layer-b', 'layer-c'],
+        align: 'top',
+        distribute: 'horizontal',
+      },
+    });
+    expect(res.ok()).toBeTruthy();
+    const source = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const body = await source.json();
+    // Both align (top) and distribute (horizontal) should have been applied
+    // Align top to canvas (y=0): all layers get dy offsets
+    // Then distribute horizontal adjusts x positions
+    expect(body.svg).toContain('translate');
+    // Verify multiple layers have transforms applied
+    const translateMatches = body.svg.match(/translate\([^)]+\)/g);
+    expect(translateMatches).toBeTruthy();
+    expect(translateMatches.length).toBeGreaterThanOrEqual(2);
   });
 });

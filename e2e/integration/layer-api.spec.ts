@@ -132,6 +132,29 @@ test.describe('Layer API — Query Operations', () => {
     expect(matches).toHaveLength(1);
   });
 
+  test('set_canvas_background with gradient_id sets url fill', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/canvas/background`, {
+      data: { gradient_id: 'my-grad' },
+    });
+    expect(res.ok()).toBeTruthy();
+    const source = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const body = await source.json();
+    expect(body.svg).toContain('id="canvas-bg"');
+    expect(body.svg).toContain('fill="url(#my-grad)"');
+  });
+
+  test('get_canvas_info returns background after setting it', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    await apiContext.post(`/api/svg/${drawId}/canvas/background`, {
+      data: { color: '#336699' },
+    });
+    const res = await apiContext.post(`/api/svg/${drawId}/canvas/info`);
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect(body.background).toBe('#336699');
+  });
+
   test('list_layers returns visibility and opacity', async ({ apiContext }) => {
     const drawId = await setupLayeredDrawing(apiContext);
     await apiContext.post(`/api/svg/${drawId}/layers/opacity`, {

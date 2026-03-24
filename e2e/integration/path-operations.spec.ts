@@ -376,6 +376,64 @@ test.describe('Path Operations API', () => {
     expect(res.status()).toBe(400);
   });
 
+  test('edit_path smooth converts lines to curves', async ({ apiContext }) => {
+    const drawId = await setup(apiContext);
+    const createRes = await apiContext.post(`/api/svg/${drawId}/path/create`, {
+      data: {
+        type: 'polyline',
+        points: [[0, 0], [50, 100], [100, 0], [150, 100]],
+        stroke: '#000',
+        layer_name: 'smooth-test',
+      },
+    });
+    const { layer_id } = await createRes.json();
+    const findRes = await apiContext.post(`/api/svg/${drawId}/path/find`, { data: { layer_id } });
+    const { path_id } = await findRes.json();
+
+    const editRes = await apiContext.post(`/api/svg/${drawId}/path/edit`, {
+      data: {
+        element_id: path_id,
+        operations: [{ type: 'smooth', tension: 0.5 }],
+      },
+    });
+    expect(editRes.ok()).toBeTruthy();
+    const editBody = await editRes.json();
+    // L commands should be converted to C (cubic Bézier) commands
+    expect(editBody.newD).toContain('C ');
+    expect(editBody.newD).not.toMatch(/L\s/);
+  });
+
+  test('edit_path simplify reduces point count', async ({ apiContext }) => {
+    const drawId = await setup(apiContext);
+    // Create a polyline with many points that are roughly collinear
+    const createRes = await apiContext.post(`/api/svg/${drawId}/path/create`, {
+      data: {
+        type: 'polyline',
+        points: [[0, 0], [10, 1], [20, 0], [30, 1], [40, 0], [50, 1], [100, 0]],
+        stroke: '#000',
+        layer_name: 'simplify-test',
+      },
+    });
+    const { layer_id } = await createRes.json();
+    const findRes = await apiContext.post(`/api/svg/${drawId}/path/find`, { data: { layer_id } });
+    const { path_id } = await findRes.json();
+
+    const editRes = await apiContext.post(`/api/svg/${drawId}/path/edit`, {
+      data: {
+        element_id: path_id,
+        operations: [{ type: 'simplify', tolerance: 2 }],
+      },
+    });
+    expect(editRes.ok()).toBeTruthy();
+    const editBody = await editRes.json();
+    // The simplified path should be shorter (fewer points) than the original
+    const originalD = 'M 0 0 L 10 1 L 20 0 L 30 1 L 40 0 L 50 1 L 100 0';
+    expect(editBody.newD.length).toBeLessThan(originalD.length);
+    // Should still start with M and contain the first and last points
+    expect(editBody.newD).toMatch(/^M 0 0/);
+    expect(editBody.newD).toContain('100 0');
+  });
+
   test('boolean_path inherits style from path A', async ({ apiContext }) => {
     const drawId = await setup(apiContext);
     const a = await createPolygonAndGetPathId(apiContext, drawId,

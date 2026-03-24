@@ -424,6 +424,8 @@ server.tool(
 - set_control: Set/change control points to create curves (index, control1?, control2?)
 - close: Add Z to close the path
 - open: Remove closing Z command
+- smooth: Convert polyline L commands to smooth cubic Bézier curves (tension, default 0.5)
+- simplify: Reduce point count using Ramer-Douglas-Peucker algorithm (tolerance, default 1.0)
 Use path/find to get the element_id of a path inside a layer.`,
   {
     element_id: z.string().describe('The id attribute of the <path> element to edit'),
@@ -452,6 +454,14 @@ Use path/find to get the element_id of a path inside a layer.`,
       }),
       z.object({ type: z.literal('close') }),
       z.object({ type: z.literal('open') }),
+      z.object({
+        type: z.literal('smooth'),
+        tension: z.number().optional().describe('Smoothing tension (0-1, default 0.5). Higher = tighter curves'),
+      }),
+      z.object({
+        type: z.literal('simplify'),
+        tolerance: z.number().optional().describe('Simplification tolerance in SVG units (default 1.0). Higher = fewer points'),
+      }),
     ])).describe('Array of edit operations to apply in order'),
   },
   async (params) => textTool('path/edit', params),

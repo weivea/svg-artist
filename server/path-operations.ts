@@ -150,7 +150,9 @@ export type PathEditOp =
   | { type: 'delete_point'; index: number }
   | { type: 'set_control'; index: number; control1?: [number, number]; control2?: [number, number] }
   | { type: 'close' }
-  | { type: 'open' };
+  | { type: 'open' }
+  | { type: 'smooth'; tension?: number }
+  | { type: 'simplify'; tolerance?: number };
 
 export function applyPathEdits(d: string, operations: PathEditOp[]): string {
   const points = parsePath(d);
@@ -196,9 +198,85 @@ export function applyPathEdits(d: string, operations: PathEditOp[]): string {
           points.pop();
         }
         break;
+      case 'smooth': {
+        const tension = op.tension ?? 0.5;
+        for (let i = 1; i < points.length; i++) {
+          if (points[i].command === 'L') {
+            const prev = points[i - 1];
+            const curr = points[i];
+            const next = i < points.length - 1 ? points[i + 1] : curr;
+            const prevPrev = i > 1 ? points[i - 2] : prev;
+
+            const cp1x = prev.x + (curr.x - prevPrev.x) * tension;
+            const cp1y = prev.y + (curr.y - prevPrev.y) * tension;
+            const cp2x = curr.x - (next.x - prev.x) * tension;
+            const cp2y = curr.y - (next.y - prev.y) * tension;
+
+            points[i].command = 'C';
+            points[i].control1 = [cp1x, cp1y];
+            points[i].control2 = [cp2x, cp2y];
+          }
+        }
+        break;
+      }
+      case 'simplify': {
+        const tolerance = op.tolerance ?? 1.0;
+        const keepIndices = rdpSimplify(points, tolerance);
+        const hasZ = points.length > 0 && points[points.length - 1].command === 'Z';
+        // Filter points keeping only those at the kept indices (excluding Z)
+        const nonZ = hasZ ? points.slice(0, -1) : points;
+        const kept = keepIndices.map((idx) => nonZ[idx]).filter(Boolean);
+        // Rebuild points array
+        points.length = 0;
+        points.push(...kept);
+        if (hasZ && points.length > 0) {
+          points.push({ command: 'Z', x: points[0].x, y: points[0].y });
+        }
+        break;
+      }
     }
   }
   return serializePath(points);
+}
+
+// ---------------------------------------------------------------------------
+// Ramer-Douglas-Peucker simplification helpers
+// ---------------------------------------------------------------------------
+
+function perpendicularDistance(
+  p: { x: number; y: number },
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len === 0) return Math.sqrt((p.x - a.x) ** 2 + (p.y - a.y) ** 2);
+  return Math.abs(dy * p.x - dx * p.y + b.x * a.y - b.y * a.x) / len;
+}
+
+function rdpSimplify(points: { x: number; y: number }[], tolerance: number): number[] {
+  if (points.length <= 2) return points.map((_, i) => i);
+
+  let maxDist = 0;
+  let maxIdx = 0;
+  const first = points[0];
+  const last = points[points.length - 1];
+
+  for (let i = 1; i < points.length - 1; i++) {
+    const dist = perpendicularDistance(points[i], first, last);
+    if (dist > maxDist) {
+      maxDist = dist;
+      maxIdx = i;
+    }
+  }
+
+  if (maxDist > tolerance) {
+    const left = rdpSimplify(points.slice(0, maxIdx + 1), tolerance);
+    const right = rdpSimplify(points.slice(maxIdx), tolerance);
+    return [...left, ...right.slice(1).map((i) => i + maxIdx)];
+  }
+  return [0, points.length - 1];
 }
 
 // ---------------------------------------------------------------------------

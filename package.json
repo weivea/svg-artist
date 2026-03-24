@@ -28,6 +28,7 @@
     "linkedom": "^0.18.12",
     "nanoid": "^5.1.7",
     "node-pty": "^1.2.0-beta.12",
+    "path-bool": "^0.0.7",
     "react-router-dom": "^7.13.1",
     "ws": "^8.20.0"
   },

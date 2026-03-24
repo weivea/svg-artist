@@ -72,14 +72,30 @@ async function imageTool(path: string, params: Record<string, unknown> = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Information Query (3)
+// Information Query (3 → 2: get_svg_source merged into get_canvas_info)
 // ---------------------------------------------------------------------------
 
 server.tool(
   'get_canvas_info',
-  'Get canvas overview: viewBox, layer count, defs count, total elements',
-  {},
-  async () => textTool('canvas/info'),
+  'Get canvas overview: viewBox, layer count, defs count, total elements. Optionally include full SVG source (replaces get_svg_source).',
+  {
+    include_source: z.boolean().optional().describe('Include the full SVG source string in the response (use sparingly on large drawings)'),
+  },
+  async ({ include_source }) => {
+    try {
+      const infoRes = await callApi('canvas/info');
+      if (!infoRes.ok) return errorResult(infoRes.status, infoRes.error!);
+      if (!include_source) return textResult(infoRes.data);
+
+      const sourceRes = await callApi('canvas/source');
+      if (!sourceRes.ok) return errorResult(sourceRes.status, sourceRes.error!);
+      const merged = { ...(infoRes.data as Record<string, unknown>), svg_source: (sourceRes.data as Record<string, unknown>).svg };
+      return textResult(merged);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return errorResult(500, message);
+    }
+  },
 );
 
 server.tool(
@@ -90,13 +106,6 @@ server.tool(
 );
 
 server.tool(
-  'get_svg_source',
-  'Get the complete SVG source code (use sparingly on large drawings)',
-  {},
-  async () => textTool('canvas/source'),
-);
-
-server.tool(
   'get_layer_colors',
   'Extract all colors used in a layer (fills, strokes, stop-colors). Returns color values with usage context for palette consistency checks.',
   { layer_id: z.string().describe('The layer id to analyze') },
@@ -104,7 +113,7 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Layer Management (7)
+// Layer Management (7 → 5: move_layer/duplicate_layer removed)
 // ---------------------------------------------------------------------------
 
 server.tool(
@@ -149,33 +158,6 @@ server.tool(
   'Delete a layer by id',
   { layer_id: z.string().describe('The layer id to delete') },
   async ({ layer_id }) => textTool('layers/delete', { layer_id }),
-);
-
-server.tool(
-  'move_layer',
-  'Move a layer to a new position or under a different parent',
-  {
-    layer_id: z.string().describe('The layer id to move'),
-    target_parent_id: z.string().optional().describe('New parent layer id (omit for root)'),
-    position: z.number().describe('New position among siblings (0-based)'),
-  },
-  async (params) => textTool('layers/move', params),
-);
-
-server.tool(
-  'duplicate_layer',
-  'Duplicate a layer with a new name, optionally applying a transform',
-  {
-    layer_id: z.string().describe('The layer id to duplicate'),
-    new_name: z.string().optional().describe('Name for the duplicated layer'),
-    transform: z.object({
-      translate: z.object({
-        x: z.number(),
-        y: z.number(),
-      }),
-    }).optional().describe('Transform to apply to the duplicate'),
-  },
-  async (params) => textTool('layers/duplicate', params),
 );
 
 server.tool(
@@ -510,34 +492,8 @@ Uses path element ids (find them with path/find). Result is placed in a new laye
 );
 
 // ---------------------------------------------------------------------------
-// Professional Tools (4)
+// Professional Tools (4 → 2: apply_filter/apply_style_preset removed)
 // ---------------------------------------------------------------------------
-
-server.tool(
-  'apply_filter',
-  `Apply a preset filter effect to a layer. Each filter accepts specific parameters:
-- drop-shadow: dx (4), dy (4), blur (6), color ("#000000"), opacity (0.5)
-- blur: radius (5)
-- glow: radius (10), color ("#ffffff"), opacity (0.8)
-- emboss: strength (2)
-- noise-texture: frequency (0.65), octaves (3), type ("fractalNoise")
-- paper: frequency (0.04), intensity (0.15)
-- watercolor: displacement (20), blur (3)
-- metallic: shininess (30), light_x (200), light_y (100)
-- glass: shininess (50), opacity (0.3)
-Values in parentheses are defaults. Pass params as key-value pairs.`,
-  {
-    layer_id: z.string().describe('The layer id to apply the filter to'),
-    filter_type: z.enum([
-      'drop-shadow', 'blur', 'glow', 'emboss', 'noise-texture',
-      'paper', 'watercolor', 'metallic', 'glass',
-    ]).describe('Type of filter to apply'),
-    params: z.record(z.string(), z.union([z.number(), z.string()])).optional().describe(
-      'Filter-specific parameters (see description for each filter type)',
-    ),
-  },
-  async (params) => textTool('filter/apply', params),
-);
 
 server.tool(
   'apply_effect',
@@ -556,16 +512,6 @@ Use mode "append" (default) to add effects to existing ones, or "replace" to sta
     mode: z.enum(['append', 'replace']).optional().describe('append (default): add to existing effects. replace: clear and start fresh.'),
   },
   async (params) => textTool('effect/apply', params),
-);
-
-server.tool(
-  'apply_style_preset',
-  'Apply a unified style preset (flat, isometric, line-art, watercolor, retro, minimalist) across layers',
-  {
-    preset: z.enum(['flat', 'isometric', 'line-art', 'watercolor', 'retro', 'minimalist']).describe('Style preset name'),
-    layers: z.array(z.string()).optional().describe('Specific layer ids to affect (default: all layers)'),
-  },
-  async (params) => textTool('style/apply', params),
 );
 
 server.tool(

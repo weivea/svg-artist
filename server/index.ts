@@ -471,6 +471,27 @@ app.post('/api/svg/:drawId/text/create', async (req: Request, res: Response) => 
   res.json({ ok: true, layer_id: result.layer_id });
 });
 
+app.post('/api/svg/:drawId/path/create', async (req: Request, res: Response) => {
+  const drawId = req.params.drawId as string;
+  const drawing = await drawingStore.get(drawId);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const { layer_id, layer_name, fill, stroke, stroke_width, ...pathSpec } = req.body as any;
+  if (!pathSpec.type) {
+    res.status(400).json({ error: 'Missing path type' }); return;
+  }
+  const engine = new SvgEngine(drawing.svgContent);
+  const result = engine.createPath(
+    pathSpec,
+    { fill, stroke, stroke_width },
+    { layer_id, layer_name },
+  );
+  if (!result.ok) { res.status(400).json({ error: result.error }); return; }
+  const svg = engine.serialize();
+  await drawingStore.updateSvg(drawId, svg);
+  broadcastSvg(drawId, svg);
+  res.json({ ok: true, layer_id: result.layer_id });
+});
+
 app.post('/api/svg/:drawId/filter/apply', async (req: Request, res: Response) => {
   const { layer_id, filter_type, params } = req.body as { layer_id?: string; filter_type?: string; params?: FilterParams };
   if (!layer_id || !filter_type) { res.status(400).json({ error: 'Missing layer_id or filter_type' }); return; }

@@ -384,6 +384,37 @@ server.tool(
   async (params) => textTool('text/create', params),
 );
 
+server.tool(
+  'create_path',
+  `Create an SVG path element from a high-level spec. Supported types:
+- line: start, end
+- polyline: points array
+- polygon: points array (auto-closed)
+- bezier: start, end, control1 (quadratic) or control1+control2 (cubic)
+- arc: start, end, radius
+- star: start (center), radius, inner_radius, corners
+- rounded-rect: start, end, corner_radius`,
+  {
+    type: z.enum(['line', 'polyline', 'polygon', 'arc', 'bezier', 'star', 'rounded-rect']).describe('Path type'),
+    points: z.array(z.tuple([z.number(), z.number()])).optional().describe('Array of [x,y] points (for polyline/polygon)'),
+    start: z.tuple([z.number(), z.number()]).optional().describe('Start point [x,y] or center (for star)'),
+    end: z.tuple([z.number(), z.number()]).optional().describe('End point [x,y] or bottom-right corner (for rounded-rect)'),
+    control1: z.tuple([z.number(), z.number()]).optional().describe('First control point [x,y] (bezier)'),
+    control2: z.tuple([z.number(), z.number()]).optional().describe('Second control point [x,y] (cubic bezier)'),
+    radius: z.number().optional().describe('Arc radius or star outer radius'),
+    inner_radius: z.number().optional().describe('Star inner radius (default: 40% of radius)'),
+    corners: z.number().optional().describe('Number of star points (default: 5)'),
+    corner_radius: z.number().optional().describe('Corner rounding for rounded-rect (default: 10)'),
+    fill: z.string().optional().describe('Fill color (default: "none")'),
+    stroke: z.string().optional().describe('Stroke color (default: "#000000")'),
+    stroke_width: z.number().optional().describe('Stroke width'),
+    layer_id: z.string().optional().describe('Add path to this existing layer (appends)'),
+    layer_name: z.string().optional().describe('Create a new layer with this name'),
+  },
+  async ({ layer_id, layer_name, fill, stroke, stroke_width, ...spec }) =>
+    textTool('path/create', { ...spec, fill, stroke, stroke_width, layer_id, layer_name }),
+);
+
 // ---------------------------------------------------------------------------
 // Professional Tools (4)
 // ---------------------------------------------------------------------------

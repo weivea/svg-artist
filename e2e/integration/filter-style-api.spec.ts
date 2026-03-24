@@ -117,4 +117,70 @@ test.describe('Filter & Style Preset API', () => {
     });
     expect(res.ok()).toBeFalsy();
   });
+
+  // --- apply_effect (chainable effects) ---
+
+  test('apply_effect chains multiple effects', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/effect/apply`, {
+      data: {
+        layer_id: 'layer-sun',
+        effects: [
+          { type: 'drop-shadow', params: { dx: 3, dy: 3, blur: 5 } },
+          { type: 'blur', params: { radius: 2 } },
+        ],
+      },
+    });
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect(body.filter_id).toBeTruthy();
+    const source = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const svgBody = await source.json();
+    expect(svgBody.svg).toContain('fegaussianblur');
+    expect(svgBody.svg).toContain('feoffset');
+    expect(svgBody.svg).toMatch(/filter="url\(#effect-chain-/);
+  });
+
+  test('apply_effect append mode adds to existing effects', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    await apiContext.post(`/api/svg/${drawId}/effect/apply`, {
+      data: {
+        layer_id: 'layer-sun',
+        effects: [{ type: 'drop-shadow' }],
+      },
+    });
+    const res = await apiContext.post(`/api/svg/${drawId}/effect/apply`, {
+      data: {
+        layer_id: 'layer-sun',
+        effects: [{ type: 'glow' }],
+        mode: 'append',
+      },
+    });
+    expect(res.ok()).toBeTruthy();
+    const source = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const svgBody = await source.json();
+    expect(svgBody.svg).toContain('feoffset');
+    expect(svgBody.svg).toContain('feflood');
+  });
+
+  test('apply_effect replace mode clears existing effects', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    await apiContext.post(`/api/svg/${drawId}/effect/apply`, {
+      data: {
+        layer_id: 'layer-sun',
+        effects: [{ type: 'drop-shadow' }],
+      },
+    });
+    const res = await apiContext.post(`/api/svg/${drawId}/effect/apply`, {
+      data: {
+        layer_id: 'layer-sun',
+        effects: [{ type: 'blur', params: { radius: 3 } }],
+        mode: 'replace',
+      },
+    });
+    expect(res.ok()).toBeTruthy();
+    const source = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const svgBody = await source.json();
+    expect(svgBody.svg).not.toContain('feoffset');
+  });
 });

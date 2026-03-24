@@ -192,6 +192,11 @@ function renderTemplate(template: string, id: string, params?: FilterParams): st
   return result;
 }
 
+export function extractFilterPrimitives(filterSvg: string): string {
+  const match = filterSvg.match(/<filter[^>]*>([\s\S]*)<\/filter>/);
+  return match ? match[1].trim() : '';
+}
+
 export async function generateFilterOrCustom(
   filterType: string,
   params?: FilterParams,

@@ -339,6 +339,25 @@ Values in parentheses are defaults. Pass params as key-value pairs.`,
 );
 
 server.tool(
+  'apply_effect',
+  `Apply one or more effects to a layer. Effects are chainable — multiple effects stack into a single combined filter.
+Supported effects: drop-shadow, blur, glow, emboss, noise-texture, paper, watercolor, metallic, glass.
+Use mode "append" (default) to add effects to existing ones, or "replace" to start fresh.`,
+  {
+    layer_id: z.string().describe('The layer id to apply effects to'),
+    effects: z.array(z.object({
+      type: z.enum([
+        'drop-shadow', 'blur', 'glow', 'emboss', 'noise-texture',
+        'paper', 'watercolor', 'metallic', 'glass',
+      ]).describe('Effect type'),
+      params: z.record(z.string(), z.union([z.number(), z.string()])).optional().describe('Effect-specific parameters'),
+    })).describe('Array of effects to apply (they stack in order)'),
+    mode: z.enum(['append', 'replace']).optional().describe('append (default): add to existing effects. replace: clear and start fresh.'),
+  },
+  async (params) => textTool('effect/apply', params),
+);
+
+server.tool(
   'apply_style_preset',
   'Apply a unified style preset (flat, isometric, line-art, watercolor, retro, minimalist) across layers',
   {

@@ -1,5 +1,5 @@
 import { parseHTML } from 'linkedom';
-import { generateFilter, FilterType, FilterParams } from './filter-templates.js';
+import { generateFilter, FilterType, FilterParams, extractFilterPrimitives, randomSuffix } from './filter-templates.js';
 import { getPresetRules, StylePreset } from './style-presets.js';
 
 export interface BBox {
@@ -525,6 +525,58 @@ export class SvgEngine {
     if (!g) return { ok: false, error: 'Layer not found' };
     const added = this.manageDefs('add', filterId, filterSvg);
     if (!added) return { ok: false, error: 'Failed to add filter to defs' };
+    g.setAttribute('filter', `url(#${filterId})`);
+    return { ok: true, filterId };
+  }
+
+  /** Apply a chain of effects to a layer. Multiple effects stack into a combined <filter> element. */
+  applyEffectChain(
+    layerId: string,
+    effects: Array<{ type: string; params?: Record<string, number | string> }>,
+    mode: 'append' | 'replace' = 'append',
+  ): { ok: boolean; filterId?: string; error?: string } {
+    const g = this._findLayerElement(layerId);
+    if (!g) return { ok: false, error: 'Layer not found' };
+
+    let existingPrimitives = '';
+    const currentFilter = g.getAttribute('filter');
+
+    if (currentFilter) {
+      const match = currentFilter.match(/url\(#([^)]+)\)/);
+      if (match) {
+        const existingFilterId = match[1];
+        const defs = this.svgElement.querySelector('defs');
+        if (defs) {
+          const existingEl = defs.querySelector(`[id="${existingFilterId}"]`);
+          if (existingEl) {
+            if (mode === 'append') {
+              existingPrimitives = existingEl.innerHTML || '';
+            }
+            existingEl.parentNode?.removeChild(existingEl);
+          }
+        }
+      }
+    }
+
+    const chainSuffix = randomSuffix();
+    const newPrimitives: string[] = [];
+    for (let i = 0; i < effects.length; i++) {
+      const effect = effects[i];
+      const result = generateFilter(effect.type as FilterType, effect.params, `${chainSuffix}-${i}`);
+      const primitives = extractFilterPrimitives(result.filterSvg);
+      newPrimitives.push(primitives);
+    }
+
+    const allPrimitives = existingPrimitives
+      ? `${existingPrimitives}\n${newPrimitives.join('\n')}`
+      : newPrimitives.join('\n');
+
+    const filterId = `effect-chain-${chainSuffix}`;
+    const filterSvg = `<filter id="${filterId}" x="-30%" y="-30%" width="160%" height="160%">\n${allPrimitives}\n</filter>`;
+
+    const added = this.manageDefs('add', filterId, filterSvg);
+    if (!added) return { ok: false, error: 'Failed to add effect chain to defs' };
+
     g.setAttribute('filter', `url(#${filterId})`);
     return { ok: true, filterId };
   }

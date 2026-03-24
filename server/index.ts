@@ -416,6 +416,23 @@ app.post('/api/svg/:drawId/filter/apply', async (req: Request, res: Response) =>
   res.json({ ok: true, filter_id: result.filterId });
 });
 
+app.post('/api/svg/:drawId/effect/apply', async (req: Request, res: Response) => {
+  const { drawId } = req.params;
+  const { layer_id, effects, mode } = req.body;
+  if (!layer_id || !effects || !Array.isArray(effects)) {
+    return res.status(400).json({ error: 'layer_id and effects array required' });
+  }
+  const drawing = await drawingStore.get(drawId);
+  if (!drawing) return res.status(404).json({ error: 'Drawing not found' });
+  const engine = new SvgEngine(drawing.svgContent);
+  const result = engine.applyEffectChain(layer_id, effects, mode || 'append');
+  if (!result.ok) return res.status(400).json({ error: result.error });
+  const svg = engine.serialize();
+  await drawingStore.updateSvg(drawId, svg);
+  broadcastSvg(drawId, svg);
+  res.json({ ok: true, filter_id: result.filterId });
+});
+
 app.post('/api/svg/:drawId/style/apply', async (req: Request, res: Response) => {
   const { preset, layers } = req.body as { preset?: string; layers?: string[] };
   if (!preset) { res.status(400).json({ error: 'Missing preset' }); return; }

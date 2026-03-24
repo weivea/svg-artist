@@ -46,9 +46,34 @@ type LDocument = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type LElement = any;
 
-/** Convert a hex color (or named color) to HSL. Returns null if not a valid 6-digit hex. */
+/** Lookup table for common SVG named colors → hex. */
+const NAMED_COLORS: Record<string, string> = {
+  red: '#ff0000', green: '#008000', blue: '#0000ff', white: '#ffffff',
+  black: '#000000', yellow: '#ffff00', cyan: '#00ffff', magenta: '#ff00ff',
+  orange: '#ffa500', purple: '#800080', gold: '#ffd700', silver: '#c0c0c0',
+  gray: '#808080', grey: '#808080', navy: '#000080', teal: '#008080',
+  maroon: '#800000', olive: '#808000', lime: '#00ff00', aqua: '#00ffff',
+  fuchsia: '#ff00ff', coral: '#ff7f50', salmon: '#fa8072', pink: '#ffc0cb',
+  tomato: '#ff6347', crimson: '#dc143c', indigo: '#4b0082', violet: '#ee82ee',
+};
+
+/** Normalize a color string to 6-digit hex, handling named colors and 3-digit hex. */
+function normalizeColor(color: string): string | null {
+  const c = color.trim().toLowerCase();
+  if (NAMED_COLORS[c]) return NAMED_COLORS[c];
+  // Handle 3-digit hex: #f00 → #ff0000
+  const short = c.match(/^#([a-f\d])([a-f\d])([a-f\d])$/i);
+  if (short) return `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}`;
+  // Already 6-digit hex
+  if (c.match(/^#[a-f\d]{6}$/i)) return c;
+  return null;
+}
+
+/** Convert a hex color (or named color) to HSL. Returns null if not a valid color. */
 function hexToHsl(hex: string): { h: number; s: number; l: number } | null {
-  const match = hex.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+  const normalized = normalizeColor(hex);
+  if (!normalized) return null;
+  const match = normalized.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
   if (!match) return null;
   let r = parseInt(match[1], 16) / 255;
   let g = parseInt(match[2], 16) / 255;

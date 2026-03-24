@@ -21,8 +21,7 @@ export function renderSvgToPng(
     opts.background = background;
   }
   if (dpi && dpi !== 72) {
-    opts.dpi = dpi;
-    // If no explicit fitTo width, scale the render based on DPI
+    // If no explicit fitTo width, scale the render based on DPI via zoom mode
     if (!width) {
       const scale = dpi / 72;
       opts.fitTo = { mode: 'zoom' as const, value: scale };

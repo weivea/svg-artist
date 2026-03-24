@@ -1,6 +1,7 @@
 import { parseHTML } from 'linkedom';
 import { generateFilter, FilterType, FilterParams, extractFilterPrimitives, randomSuffix } from './filter-templates.js';
 import { getPresetRules, StylePreset } from './style-presets.js';
+import { buildTextElement, TextOptions } from './typography.js';
 
 export interface BBox {
   x: number;
@@ -1038,6 +1039,27 @@ export class SvgEngine {
     }
 
     return true;
+  }
+
+  /** Create a text element and add it to a new or existing layer. */
+  createText(opts: TextOptions & { layer_id?: string; layer_name?: string }): { ok: boolean; layer_id?: string; error?: string } {
+    const textSvg = buildTextElement(opts);
+
+    if (opts.layer_id) {
+      const layer = this._findLayerElement(opts.layer_id);
+      if (!layer) return { ok: false, error: 'Layer not found' };
+      // Parse the text SVG and append to the layer
+      const { document: tempDoc } = parseHTML(`<!DOCTYPE html><html><body>${textSvg}</body></html>`);
+      const newEl = tempDoc.body.firstElementChild;
+      if (!newEl) return { ok: false, error: 'Failed to parse text element' };
+      layer.appendChild(newEl.cloneNode(true));
+      return { ok: true, layer_id: opts.layer_id };
+    }
+
+    const name = opts.layer_name || `text-${Date.now().toString(36)}`;
+    const layerId = this.addLayer(name, textSvg);
+    if (!layerId) return { ok: false, error: 'Failed to create layer' };
+    return { ok: true, layer_id: layerId };
   }
 
   private _elementBBox(el: LElement): BBox | null {

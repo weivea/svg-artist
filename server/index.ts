@@ -451,6 +451,26 @@ app.post('/api/svg/:drawId/align', async (req: Request, res: Response) => {
 });
 
 // --- New Professional Tools API ---
+app.post('/api/svg/:drawId/text/create', async (req: Request, res: Response) => {
+  const drawId = req.params.drawId as string;
+  const drawing = await drawingStore.get(drawId);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const { layer_id, layer_name, ...textOpts } = req.body as any;
+  if (!textOpts.text && textOpts.text !== '' && !(textOpts.spans && textOpts.spans.length > 0)) {
+    res.status(400).json({ error: 'Missing text or spans' }); return;
+  }
+  if (textOpts.x === undefined || textOpts.y === undefined) {
+    res.status(400).json({ error: 'Missing x or y position' }); return;
+  }
+  const engine = new SvgEngine(drawing.svgContent);
+  const result = engine.createText({ ...textOpts, layer_id, layer_name });
+  if (!result.ok) { res.status(400).json({ error: result.error }); return; }
+  const svg = engine.serialize();
+  await drawingStore.updateSvg(drawId, svg);
+  broadcastSvg(drawId, svg);
+  res.json({ ok: true, layer_id: result.layer_id });
+});
+
 app.post('/api/svg/:drawId/filter/apply', async (req: Request, res: Response) => {
   const { layer_id, filter_type, params } = req.body as { layer_id?: string; filter_type?: string; params?: FilterParams };
   if (!layer_id || !filter_type) { res.status(400).json({ error: 'Missing layer_id or filter_type' }); return; }

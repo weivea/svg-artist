@@ -347,6 +347,44 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
+// Typography & Path Operations
+// ---------------------------------------------------------------------------
+
+server.tool(
+  'create_text',
+  `Create a text element with rich typography options. Supports single-line, multi-line (with line_height), rich text (with spans), and text on a path (with path_id). Creates a new layer by default, or appends to an existing layer via layer_id.`,
+  {
+    text: z.string().describe('The text content. Use \\n for multi-line (requires line_height)'),
+    x: z.number().describe('X position'),
+    y: z.number().describe('Y position'),
+    font_family: z.string().optional().describe('Font family (e.g. "Arial", "Georgia")'),
+    font_size: z.number().optional().describe('Font size in px'),
+    font_weight: z.union([z.number(), z.string()]).optional().describe('Font weight (e.g. 400, 700, "bold")'),
+    font_style: z.enum(['normal', 'italic']).optional().describe('Font style'),
+    letter_spacing: z.number().optional().describe('Letter spacing in px'),
+    word_spacing: z.number().optional().describe('Word spacing in px'),
+    line_height: z.number().optional().describe('Line height for multi-line text (dy between tspan lines)'),
+    text_anchor: z.enum(['start', 'middle', 'end']).optional().describe('Horizontal text anchor'),
+    dominant_baseline: z.enum(['auto', 'middle', 'hanging']).optional().describe('Vertical baseline alignment'),
+    text_decoration: z.enum(['none', 'underline', 'line-through']).optional().describe('Text decoration'),
+    fill: z.string().optional().describe('Text fill color'),
+    stroke: z.string().optional().describe('Text stroke color'),
+    path_id: z.string().optional().describe('Id of a <path> in defs to place text along'),
+    spans: z.array(z.object({
+      text: z.string().describe('Span text content'),
+      fill: z.string().optional().describe('Override fill color'),
+      font_size: z.number().optional().describe('Override font size'),
+      font_weight: z.union([z.number(), z.string()]).optional().describe('Override font weight'),
+      dx: z.number().optional().describe('Horizontal offset from previous span'),
+      dy: z.number().optional().describe('Vertical offset from previous span'),
+    })).optional().describe('Rich text spans (overrides plain text)'),
+    layer_id: z.string().optional().describe('Add text to this existing layer (appends)'),
+    layer_name: z.string().optional().describe('Create a new layer with this name'),
+  },
+  async (params) => textTool('text/create', params),
+);
+
+// ---------------------------------------------------------------------------
 // Professional Tools (4)
 // ---------------------------------------------------------------------------
 

@@ -388,12 +388,12 @@ app.post('/api/svg/:drawId/defs/list', async (req: Request, res: Response) => {
 });
 
 app.post('/api/svg/:drawId/defs/manage', async (req: Request, res: Response) => {
-  const { action, id, content } = req.body as any;
+  const { action, id, content, ...extraParams } = req.body as any;
   if (!action || !id) { res.status(400).json({ error: 'Missing action or id' }); return; }
   const drawing = await drawingStore.get(req.params.drawId as string);
   if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
   const engine = new SvgEngine(drawing.svgContent);
-  if (!engine.manageDefs(action, id, content)) { res.status(400).json({ error: 'Defs operation failed' }); return; }
+  if (!engine.manageDefs(action, id, content, extraParams)) { res.status(400).json({ error: 'Defs operation failed' }); return; }
   const newSvg = engine.serialize();
   await drawingStore.updateSvg(req.params.drawId as string, newSvg);
   broadcastSvg(req.params.drawId as string, newSvg);
@@ -925,11 +925,11 @@ app.post('/api/svg/:drawId/scratch/:canvasId/preview', async (req: Request, res:
 });
 
 app.post('/api/svg/:drawId/scratch/:canvasId/defs/manage', async (req: Request, res: Response) => {
-  const { action, id, content } = req.body as { action?: string; id?: string; content?: string };
+  const { action, id, content, ...extraParams } = req.body as { action?: string; id?: string; content?: string; [key: string]: any };
   if (!action || !id) { res.status(400).json({ error: 'Missing action or id' }); return; }
   const engine = scratchStore.get(req.params.canvasId as string);
   if (!engine) { res.status(404).json({ error: 'Scratch canvas not found' }); return; }
-  const ok = engine.manageDefs(action as 'add' | 'update' | 'delete', id, content);
+  const ok = engine.manageDefs(action, id, content, extraParams);
   if (!ok) { res.status(400).json({ error: 'Defs operation failed' }); return; }
   res.json({ ok: true });
 });

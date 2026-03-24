@@ -553,8 +553,62 @@ export class SvgEngine {
     }));
   }
 
-  /** Manage defs: add, update, or delete */
-  manageDefs(action: 'add' | 'update' | 'delete', id: string, content?: string): boolean {
+  /** Manage defs: add, update, delete, create_gradient, create_pattern, create_clip_mask */
+  manageDefs(action: string, id: string, content?: string, params?: Record<string, any>): boolean {
+    // --- Shortcut actions ---
+    if (action === 'create_gradient') {
+      const p = params || {};
+      const { gradient_type, stops, x1, y1, x2, y2, cx, cy, r, fx, fy, units, spread } = p;
+      const tag = gradient_type === 'radial' ? 'radialGradient' : 'linearGradient';
+      const attrs: string[] = [`id="${id}"`];
+      if (gradient_type === 'linear' || !gradient_type) {
+        if (x1 !== undefined) attrs.push(`x1="${x1}"`);
+        if (y1 !== undefined) attrs.push(`y1="${y1}"`);
+        if (x2 !== undefined) attrs.push(`x2="${x2}"`);
+        if (y2 !== undefined) attrs.push(`y2="${y2}"`);
+      } else {
+        if (cx !== undefined) attrs.push(`cx="${cx}"`);
+        if (cy !== undefined) attrs.push(`cy="${cy}"`);
+        if (r !== undefined) attrs.push(`r="${r}"`);
+        if (fx !== undefined) attrs.push(`fx="${fx}"`);
+        if (fy !== undefined) attrs.push(`fy="${fy}"`);
+      }
+      if (units) attrs.push(`gradientUnits="${units}"`);
+      if (spread) attrs.push(`spreadMethod="${spread}"`);
+      const stopsHtml = (stops || []).map((s: any) => {
+        let stopAttrs = `offset="${s.offset}" stop-color="${s.color}"`;
+        if (s.opacity !== undefined) stopAttrs += ` stop-opacity="${s.opacity}"`;
+        return `<stop ${stopAttrs}/>`;
+      }).join('\n  ');
+      const builtContent = `<${tag} ${attrs.join(' ')}>\n  ${stopsHtml}\n</${tag}>`;
+      return this.manageDefs('add', id, builtContent);
+    }
+
+    if (action === 'create_pattern') {
+      const p = params || {};
+      const { pattern_content, pattern_width, pattern_height, pattern_units } = p;
+      const attrs: string[] = [`id="${id}"`];
+      if (pattern_width !== undefined) attrs.push(`width="${pattern_width}"`);
+      if (pattern_height !== undefined) attrs.push(`height="${pattern_height}"`);
+      if (pattern_units) attrs.push(`patternUnits="${pattern_units}"`);
+      const inner = pattern_content || '';
+      const builtContent = `<pattern ${attrs.join(' ')}>${inner}</pattern>`;
+      return this.manageDefs('add', id, builtContent);
+    }
+
+    if (action === 'create_clip_mask') {
+      const p = params || {};
+      const { clip_content, mask_content } = p;
+      let builtContent: string;
+      if (mask_content) {
+        builtContent = `<mask id="${id}">${mask_content}</mask>`;
+      } else {
+        builtContent = `<clipPath id="${id}">${clip_content || ''}</clipPath>`;
+      }
+      return this.manageDefs('add', id, builtContent);
+    }
+
+    // --- Standard actions ---
     let defs = this.svgElement.querySelector('defs');
 
     if (action === 'delete') {

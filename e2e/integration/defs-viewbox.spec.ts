@@ -90,4 +90,103 @@ test.describe('Defs & ViewBox API', () => {
     const info = await infoRes.json();
     expect(info.viewBox).toBe('0 0 1600 800'); // x=0, y=0 preserved, width changed, height=800 preserved
   });
+
+  test('manage_defs create_gradient creates linear gradient', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/defs/manage`, {
+      data: {
+        action: 'create_gradient',
+        id: 'my-gradient',
+        gradient_type: 'linear',
+        stops: [
+          { offset: '0%', color: '#ff0000' },
+          { offset: '100%', color: '#0000ff' },
+        ],
+        x1: '0%', y1: '0%', x2: '100%', y2: '0%',
+      },
+    });
+    expect(res.ok()).toBeTruthy();
+    const source = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const body = await source.json();
+    expect(body.svg.toLowerCase()).toContain('lineargradient');
+    expect(body.svg).toContain('id="my-gradient"');
+    expect(body.svg).toContain('#ff0000');
+    expect(body.svg).toContain('#0000ff');
+  });
+
+  test('manage_defs create_gradient creates radial gradient', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/defs/manage`, {
+      data: {
+        action: 'create_gradient',
+        id: 'radial-grad',
+        gradient_type: 'radial',
+        stops: [
+          { offset: '0%', color: 'white' },
+          { offset: '100%', color: 'black', opacity: 0.5 },
+        ],
+        cx: '50%', cy: '50%', r: '50%',
+      },
+    });
+    expect(res.ok()).toBeTruthy();
+    const source = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const body = await source.json();
+    expect(body.svg.toLowerCase()).toContain('radialgradient');
+    expect(body.svg).toContain('id="radial-grad"');
+    expect(body.svg).toContain('stop-opacity="0.5"');
+  });
+
+  test('manage_defs create_pattern creates pattern def', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/defs/manage`, {
+      data: {
+        action: 'create_pattern',
+        id: 'dots-pattern',
+        pattern_width: '10',
+        pattern_height: '10',
+        pattern_units: 'userSpaceOnUse',
+        pattern_content: '<circle cx="5" cy="5" r="2" fill="red"/>',
+      },
+    });
+    expect(res.ok()).toBeTruthy();
+    const source = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const body = await source.json();
+    expect(body.svg).toContain('pattern');
+    expect(body.svg).toContain('id="dots-pattern"');
+    // linkedom may lowercase attribute names, check case-insensitively for attr name
+    expect(body.svg.toLowerCase()).toContain('patternunits=');
+    expect(body.svg).toContain('userSpaceOnUse');
+  });
+
+  test('manage_defs create_clip_mask creates clipPath', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/defs/manage`, {
+      data: {
+        action: 'create_clip_mask',
+        id: 'my-clip',
+        clip_content: '<circle cx="400" cy="400" r="200"/>',
+      },
+    });
+    expect(res.ok()).toBeTruthy();
+    const source = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const body = await source.json();
+    expect(body.svg.toLowerCase()).toContain('clippath');
+    expect(body.svg).toContain('id="my-clip"');
+  });
+
+  test('manage_defs create_clip_mask creates mask when mask_content provided', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/defs/manage`, {
+      data: {
+        action: 'create_clip_mask',
+        id: 'my-mask',
+        mask_content: '<rect width="800" height="800" fill="white"/>',
+      },
+    });
+    expect(res.ok()).toBeTruthy();
+    const source = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const body = await source.json();
+    expect(body.svg).toContain('<mask');
+    expect(body.svg).toContain('id="my-mask"');
+  });
 });

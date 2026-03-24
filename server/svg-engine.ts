@@ -914,6 +914,86 @@ export class SvgEngine {
     return true;
   }
 
+  /** Align and/or distribute layers relative to a reference or each other. */
+  alignDistribute(opts: {
+    layer_ids: string[];
+    align?: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
+    distribute?: 'horizontal' | 'vertical';
+    reference?: string | 'canvas';
+  }): boolean {
+    if (opts.layer_ids.length < 2) return false;
+
+    // Collect bounding boxes
+    const bboxes: Array<{ id: string; bbox: BBox }> = [];
+    for (const id of opts.layer_ids) {
+      const bbox = this.getElementBBox(id);
+      if (bbox) bboxes.push({ id, bbox });
+    }
+    if (bboxes.length < 2) return false;
+
+    // Determine reference bounds
+    let refBbox: BBox;
+    if (opts.reference && opts.reference !== 'canvas') {
+      const ref = this.getElementBBox(opts.reference);
+      if (!ref) return false;
+      refBbox = ref;
+    } else {
+      // Default: use canvas viewBox as reference
+      const vb = this.svgElement.getAttribute('viewBox') || '0 0 800 800';
+      const parts = vb.split(/\s+/).map(Number);
+      refBbox = { x: parts[0] || 0, y: parts[1] || 0, width: parts[2] || 800, height: parts[3] || 800 };
+    }
+
+    // Align
+    if (opts.align) {
+      for (const item of bboxes) {
+        let dx = 0, dy = 0;
+        switch (opts.align) {
+          case 'left': dx = refBbox.x - item.bbox.x; break;
+          case 'center': dx = (refBbox.x + refBbox.width / 2) - (item.bbox.x + item.bbox.width / 2); break;
+          case 'right': dx = (refBbox.x + refBbox.width) - (item.bbox.x + item.bbox.width); break;
+          case 'top': dy = refBbox.y - item.bbox.y; break;
+          case 'middle': dy = (refBbox.y + refBbox.height / 2) - (item.bbox.y + item.bbox.height / 2); break;
+          case 'bottom': dy = (refBbox.y + refBbox.height) - (item.bbox.y + item.bbox.height); break;
+        }
+        if (dx !== 0 || dy !== 0) {
+          this.transformLayer(item.id, { translate: { x: dx, y: dy }, mode: 'compose' });
+        }
+      }
+    }
+
+    // Distribute
+    if (opts.distribute) {
+      const sorted = [...bboxes].sort((a, b) =>
+        opts.distribute === 'horizontal' ? a.bbox.x - b.bbox.x : a.bbox.y - b.bbox.y,
+      );
+      if (sorted.length >= 3) {
+        const first = sorted[0];
+        const last = sorted[sorted.length - 1];
+        const isHoriz = opts.distribute === 'horizontal';
+        const totalSpan = isHoriz
+          ? (last.bbox.x + last.bbox.width) - first.bbox.x
+          : (last.bbox.y + last.bbox.height) - first.bbox.y;
+        const totalItemSize = sorted.reduce((sum, s) => sum + (isHoriz ? s.bbox.width : s.bbox.height), 0);
+        const gap = (totalSpan - totalItemSize) / (sorted.length - 1);
+
+        let pos = isHoriz ? first.bbox.x : first.bbox.y;
+        for (let i = 0; i < sorted.length; i++) {
+          const item = sorted[i];
+          const currentPos = isHoriz ? item.bbox.x : item.bbox.y;
+          const delta = pos - currentPos;
+          if (Math.abs(delta) > 0.01) {
+            const translate = isHoriz ? { x: delta, y: 0 } : { x: 0, y: delta };
+            this.transformLayer(item.id, { translate, mode: 'compose' });
+          }
+          pos += (isHoriz ? item.bbox.width : item.bbox.height) + gap;
+        }
+      }
+    }
+
+    return true;
+  }
+
   private _elementBBox(el: LElement): BBox | null {
     const tag = el.tagName.toLowerCase();
     if (tag === 'rect') {

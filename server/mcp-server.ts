@@ -308,6 +308,18 @@ server.tool(
   async (params) => textTool('canvas/background', params),
 );
 
+server.tool(
+  'align_distribute',
+  'Align layers to an edge/center or distribute them with equal spacing. Provide at least 2 layer_ids. Reference defaults to canvas viewBox.',
+  {
+    layer_ids: z.array(z.string()).min(2).describe('Layer ids to align/distribute (minimum 2)'),
+    align: z.enum(['left', 'center', 'right', 'top', 'middle', 'bottom']).optional().describe('Alignment edge or center axis'),
+    distribute: z.enum(['horizontal', 'vertical']).optional().describe('Distribute layers with equal spacing along axis'),
+    reference: z.string().optional().describe('Reference layer id or "canvas" (default: canvas viewBox)'),
+  },
+  async (params) => textTool('align', params),
+);
+
 // ---------------------------------------------------------------------------
 // Preview (2)
 // ---------------------------------------------------------------------------

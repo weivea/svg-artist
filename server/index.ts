@@ -425,6 +425,31 @@ app.post('/api/svg/:drawId/canvas/background', async (req: Request, res: Respons
   res.json({ ok: true });
 });
 
+app.post('/api/svg/:drawId/align', async (req: Request, res: Response) => {
+  const { layer_ids, align, distribute, reference } = req.body as {
+    layer_ids?: string[];
+    align?: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
+    distribute?: 'horizontal' | 'vertical';
+    reference?: string;
+  };
+  if (!layer_ids || !Array.isArray(layer_ids) || layer_ids.length < 2) {
+    res.status(400).json({ error: 'At least 2 layer_ids required' }); return;
+  }
+  if (!align && !distribute) {
+    res.status(400).json({ error: 'At least one of align or distribute required' }); return;
+  }
+  const drawId = req.params.drawId as string;
+  const drawing = await drawingStore.get(drawId);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const engine = new SvgEngine(drawing.svgContent);
+  const ok = engine.alignDistribute({ layer_ids, align, distribute, reference });
+  if (!ok) { res.status(400).json({ error: 'Align/distribute failed (layers not found or insufficient)' }); return; }
+  const newSvg = engine.serialize();
+  await drawingStore.updateSvg(drawId, newSvg);
+  broadcastSvg(drawId, newSvg);
+  res.json({ ok: true });
+});
+
 // --- New Professional Tools API ---
 app.post('/api/svg/:drawId/filter/apply', async (req: Request, res: Response) => {
   const { layer_id, filter_type, params } = req.body as { layer_id?: string; filter_type?: string; params?: FilterParams };

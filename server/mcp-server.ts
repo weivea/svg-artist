@@ -541,7 +541,7 @@ server.tool(
 );
 
 // ---------------------------------------------------------------------------
-// Scratch Canvas Tools (7)
+// Scratch Canvas Tools (9)
 // ---------------------------------------------------------------------------
 
 server.tool(
@@ -585,6 +585,28 @@ server.tool(
     canvasId: z.string().describe('The scratch canvas ID'),
   },
   async ({ canvasId }) => textTool(`scratch/${canvasId}/layers/list`),
+);
+
+server.tool(
+  'scratch_delete_layer',
+  'Delete a layer from a scratch canvas by id.',
+  {
+    canvasId: z.string().describe('The scratch canvas ID'),
+    layer_id: z.string().describe('The layer id to delete'),
+  },
+  async ({ canvasId, ...rest }) => textTool(`scratch/${canvasId}/layers/delete`, rest),
+);
+
+server.tool(
+  'scratch_manage_defs',
+  'Add, update, or delete items in <defs> on a scratch canvas (gradients, patterns, filters)',
+  {
+    canvasId: z.string().describe('The scratch canvas ID'),
+    action: z.enum(['add', 'update', 'delete']).describe('Operation to perform'),
+    id: z.string().describe('Id of the def element'),
+    content: z.string().optional().describe('SVG content (required for add/update)'),
+  },
+  async ({ canvasId, ...rest }) => textTool(`scratch/${canvasId}/defs/manage`, rest),
 );
 
 server.tool(

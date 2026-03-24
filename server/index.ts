@@ -734,6 +734,16 @@ app.post('/api/svg/:drawId/scratch/:canvasId/layers/list', async (req: Request, 
   res.json({ layers: engine.listLayers() });
 });
 
+app.post('/api/svg/:drawId/scratch/:canvasId/layers/delete', async (req: Request, res: Response) => {
+  const { layer_id } = req.body as { layer_id?: string };
+  if (!layer_id) { res.status(400).json({ error: 'Missing layer_id' }); return; }
+  const engine = scratchStore.get(req.params.canvasId as string);
+  if (!engine) { res.status(404).json({ error: 'Scratch canvas not found' }); return; }
+  const ok = engine.deleteLayer(layer_id);
+  if (!ok) { res.status(404).json({ error: 'Layer not found' }); return; }
+  res.json({ ok: true });
+});
+
 app.post('/api/svg/:drawId/scratch/:canvasId/preview', async (req: Request, res: Response) => {
   const { width } = req.body as { width?: number };
   const engine = scratchStore.get(req.params.canvasId as string);

@@ -232,4 +232,110 @@ test.describe('Scratch Canvas API', () => {
     });
     expect(res.status()).toBe(404);
   });
+
+  test('delete layer from scratch canvas', async ({ apiContext }) => {
+    const drawId = await createDrawing(apiContext);
+    const createRes = await apiContext.post(`/api/svg/${drawId}/scratch/create`, {
+      data: { viewBox: '0 0 120 80' },
+    });
+    const { canvasId } = await createRes.json();
+
+    const addRes = await apiContext.post(`/api/svg/${drawId}/scratch/${canvasId}/layers/add`, {
+      data: { name: 'iris', content: '<circle cx="60" cy="40" r="20" fill="blue"/>' },
+    });
+    const { layer_id } = await addRes.json();
+
+    // Verify layer exists
+    const listBefore = await apiContext.post(`/api/svg/${drawId}/scratch/${canvasId}/layers/list`);
+    const beforeBody = await listBefore.json();
+    expect(beforeBody.layers).toHaveLength(1);
+
+    // Delete the layer
+    const res = await apiContext.post(`/api/svg/${drawId}/scratch/${canvasId}/layers/delete`, {
+      data: { layer_id },
+    });
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+
+    // Verify layer is gone
+    const listAfter = await apiContext.post(`/api/svg/${drawId}/scratch/${canvasId}/layers/list`);
+    const afterBody = await listAfter.json();
+    expect(afterBody.layers).toHaveLength(0);
+  });
+
+  test('delete layer from scratch canvas fails for nonexistent layer', async ({ apiContext }) => {
+    const drawId = await createDrawing(apiContext);
+    const createRes = await apiContext.post(`/api/svg/${drawId}/scratch/create`, {
+      data: { viewBox: '0 0 120 80' },
+    });
+    const { canvasId } = await createRes.json();
+
+    const res = await apiContext.post(`/api/svg/${drawId}/scratch/${canvasId}/layers/delete`, {
+      data: { layer_id: 'nonexistent' },
+    });
+    expect(res.status()).toBe(404);
+  });
+
+  test('delete layer from scratch canvas fails without layer_id', async ({ apiContext }) => {
+    const drawId = await createDrawing(apiContext);
+    const createRes = await apiContext.post(`/api/svg/${drawId}/scratch/create`, {
+      data: { viewBox: '0 0 120 80' },
+    });
+    const { canvasId } = await createRes.json();
+
+    const res = await apiContext.post(`/api/svg/${drawId}/scratch/${canvasId}/layers/delete`, {
+      data: {},
+    });
+    expect(res.status()).toBe(400);
+  });
+
+  test('manage defs on scratch canvas (add and verify on merge)', async ({ apiContext }) => {
+    const drawId = await createDrawing(apiContext);
+    const createRes = await apiContext.post(`/api/svg/${drawId}/scratch/create`, {
+      data: { viewBox: '0 0 120 80' },
+    });
+    const { canvasId } = await createRes.json();
+
+    // Add a gradient def
+    const addDefRes = await apiContext.post(`/api/svg/${drawId}/scratch/${canvasId}/defs/manage`, {
+      data: {
+        action: 'add',
+        id: 'test-grad',
+        content: '<linearGradient id="test-grad"><stop offset="0%" stop-color="red"/><stop offset="100%" stop-color="blue"/></linearGradient>',
+      },
+    });
+    expect(addDefRes.ok()).toBeTruthy();
+    const addDefBody = await addDefRes.json();
+    expect(addDefBody.ok).toBe(true);
+
+    // Update the def
+    const updateDefRes = await apiContext.post(`/api/svg/${drawId}/scratch/${canvasId}/defs/manage`, {
+      data: {
+        action: 'update',
+        id: 'test-grad',
+        content: '<linearGradient id="test-grad"><stop offset="0%" stop-color="green"/><stop offset="100%" stop-color="yellow"/></linearGradient>',
+      },
+    });
+    expect(updateDefRes.ok()).toBeTruthy();
+
+    // Delete the def
+    const deleteDefRes = await apiContext.post(`/api/svg/${drawId}/scratch/${canvasId}/defs/manage`, {
+      data: { action: 'delete', id: 'test-grad' },
+    });
+    expect(deleteDefRes.ok()).toBeTruthy();
+  });
+
+  test('manage defs on scratch canvas fails without action or id', async ({ apiContext }) => {
+    const drawId = await createDrawing(apiContext);
+    const createRes = await apiContext.post(`/api/svg/${drawId}/scratch/create`, {
+      data: { viewBox: '0 0 120 80' },
+    });
+    const { canvasId } = await createRes.json();
+
+    const res = await apiContext.post(`/api/svg/${drawId}/scratch/${canvasId}/defs/manage`, {
+      data: { action: 'add' }, // missing id
+    });
+    expect(res.status()).toBe(400);
+  });
 });

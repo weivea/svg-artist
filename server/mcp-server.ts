@@ -178,6 +178,20 @@ server.tool(
   async (params) => textTool('layers/duplicate', params),
 );
 
+server.tool(
+  'reorder_layers',
+  'Batch reorder layers: move to position, move up/down, move to top/bottom',
+  {
+    operations: z.array(z.object({
+      layer_id: z.string().describe('The layer id to move'),
+      action: z.enum(['move_to', 'move_up', 'move_down', 'move_to_top', 'move_to_bottom']).describe('Reorder action'),
+      position: z.number().optional().describe('Target position (for move_to)'),
+      parent_id: z.string().optional().describe('Move to different parent group'),
+    })).describe('Array of reorder operations to apply in sequence'),
+  },
+  async (params) => textTool('layers/reorder', params),
+);
+
 // ---------------------------------------------------------------------------
 // Transform & Style (3)
 // ---------------------------------------------------------------------------

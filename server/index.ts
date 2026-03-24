@@ -296,6 +296,22 @@ app.post('/api/svg/:drawId/layers/move', async (req: Request, res: Response) => 
   res.json({ ok: true });
 });
 
+app.post('/api/svg/:drawId/layers/reorder', async (req: Request, res: Response) => {
+  const { drawId } = req.params;
+  const { operations } = req.body;
+  if (!operations || !Array.isArray(operations)) {
+    return res.status(400).json({ error: 'operations array required' });
+  }
+  const drawing = await drawingStore.get(drawId);
+  if (!drawing) return res.status(404).json({ error: 'Drawing not found' });
+  const engine = new SvgEngine(drawing.svgContent);
+  engine.reorderLayers(operations);
+  const svg = engine.serialize();
+  await drawingStore.updateSvg(drawId, svg);
+  broadcastSvg(drawId, svg);
+  res.json({ ok: true });
+});
+
 app.post('/api/svg/:drawId/layers/duplicate', async (req: Request, res: Response) => {
   const { layer_id, new_name, transform } = req.body as { layer_id?: string; new_name?: string; transform?: { translate?: { x: number; y: number } } };
   if (!layer_id) { res.status(400).json({ error: 'Missing layer_id' }); return; }

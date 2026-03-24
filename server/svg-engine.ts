@@ -13,13 +13,28 @@ export interface LayerInfo {
   id: string;
   name: string;
   children: LayerInfo[];
+  visible: boolean;
+  opacity: number;
+  hasTransform: boolean;
+  hasFilter: boolean;
 }
 
 export interface CanvasInfo {
   viewBox: string;
+  width: number;
+  height: number;
   layerCount: number;
   defsCount: number;
   totalElements: number;
+  layers: Array<{
+    id: string;
+    name: string;
+    visible: boolean;
+    locked: boolean;
+    hasFilter: boolean;
+    childCount: number;
+  }>;
+  background: string | null;
 }
 
 // linkedom types - DOM types (Document, Element) are not available in server tsconfig
@@ -52,7 +67,11 @@ export class SvgEngine {
   }
 
   getCanvasInfo(): CanvasInfo {
-    const viewBox = this.svgElement.getAttribute('viewBox') || '';
+    const viewBox = this.svgElement.getAttribute('viewBox') || '0 0 800 800';
+    const vbParts = viewBox.split(/\s+/).map(Number);
+    const width = vbParts[2] || 800;
+    const height = vbParts[3] || 800;
+
     const allElements = this.svgElement.querySelectorAll('*');
     const defs = this.svgElement.querySelector('defs');
     const defsCount = defs ? Array.from(defs.children).length : 0;
@@ -66,12 +85,26 @@ export class SvgEngine {
       }
     }
 
-    return {
-      viewBox,
-      layerCount,
-      defsCount,
-      totalElements: allElements.length,
-    };
+    const layers: CanvasInfo['layers'] = [];
+    for (const child of Array.from(this.svgElement.children) as LElement[]) {
+      if (this._isLayerGroup(child)) {
+        const display = child.getAttribute('display');
+        const pointerEvents = child.getAttribute('pointer-events');
+        layers.push({
+          id: child.id,
+          name: child.getAttribute('data-name') || child.id,
+          visible: display !== 'none',
+          locked: pointerEvents === 'none',
+          hasFilter: !!child.getAttribute('filter'),
+          childCount: Array.from(child.querySelectorAll('*')).length,
+        });
+      }
+    }
+
+    const bgEl = this.svgElement.querySelector('#canvas-bg');
+    const background = bgEl ? (bgEl.getAttribute('fill') || null) : null;
+
+    return { viewBox, width, height, layerCount, defsCount, totalElements: allElements.length, layers, background };
   }
 
   listLayers(): LayerInfo[] {
@@ -95,10 +128,16 @@ export class SvgEngine {
       }
     }
 
+    const display = element.getAttribute('display');
+    const opacityStr = element.getAttribute('opacity');
     return {
       id: element.id,
       name: element.getAttribute('data-name') || element.id,
       children,
+      visible: display !== 'none',
+      opacity: opacityStr !== null ? parseFloat(opacityStr) : 1,
+      hasTransform: !!element.getAttribute('transform'),
+      hasFilter: !!element.getAttribute('filter'),
     };
   }
 
@@ -218,6 +257,75 @@ export class SvgEngine {
       targetParent.insertBefore(element, layerChildren[position]);
     }
 
+    return true;
+  }
+
+  reorderLayers(operations: Array<{
+    layer_id: string;
+    action: 'move_to' | 'move_up' | 'move_down' | 'move_to_top' | 'move_to_bottom';
+    position?: number;
+    parent_id?: string;
+  }>): boolean {
+    for (const op of operations) {
+      const element = this._findLayerElement(op.layer_id);
+      if (!element) continue;
+
+      const parent = op.parent_id
+        ? (this._findLayerElement(op.parent_id) || this.svgElement)
+        : (element.parentElement || this.svgElement);
+
+      switch (op.action) {
+        case 'move_to_top':
+          element.parentNode?.removeChild(element);
+          parent.appendChild(element);
+          break;
+        case 'move_to_bottom': {
+          element.parentNode?.removeChild(element);
+          const first = this._getLayerChildren(parent)[0];
+          if (first) {
+            parent.insertBefore(element, first);
+          } else {
+            parent.appendChild(element);
+          }
+          break;
+        }
+        case 'move_up': {
+          const currentSiblings = this._getLayerChildren(parent);
+          const idx = currentSiblings.indexOf(element);
+          if (idx < currentSiblings.length - 1) {
+            const next = currentSiblings[idx + 1];
+            element.parentNode?.removeChild(element);
+            if (next.nextElementSibling) {
+              parent.insertBefore(element, next.nextElementSibling);
+            } else {
+              parent.appendChild(element);
+            }
+          }
+          break;
+        }
+        case 'move_down': {
+          const currentSiblings = this._getLayerChildren(parent);
+          const idx = currentSiblings.indexOf(element);
+          if (idx > 0) {
+            const prev = currentSiblings[idx - 1];
+            element.parentNode?.removeChild(element);
+            parent.insertBefore(element, prev);
+          }
+          break;
+        }
+        case 'move_to': {
+          const pos = op.position ?? 0;
+          element.parentNode?.removeChild(element);
+          const children = this._getLayerChildren(parent);
+          if (pos >= children.length) {
+            parent.appendChild(element);
+          } else {
+            parent.insertBefore(element, children[pos]);
+          }
+          break;
+        }
+      }
+    }
     return true;
   }
 

@@ -111,4 +111,34 @@ test.describe('Layer API — Mutations', () => {
     expect(layerBody.content).toContain('circle');
     expect(layerBody.content).toContain('FFD700');
   });
+
+  test('reorder_layers moves layer to top', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/layers/reorder`, {
+      data: {
+        operations: [{ layer_id: 'layer-bg', action: 'move_to_top' }],
+      },
+    });
+    expect(res.ok()).toBeTruthy();
+    const listRes = await apiContext.post(`/api/svg/${drawId}/layers/list`);
+    const body = await listRes.json();
+    expect(body.layers[body.layers.length - 1].id).toBe('layer-bg');
+  });
+
+  test('reorder_layers batch operations', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/layers/reorder`, {
+      data: {
+        operations: [
+          { layer_id: 'layer-sun', action: 'move_to_bottom' },
+          { layer_id: 'layer-bg', action: 'move_to_top' },
+        ],
+      },
+    });
+    expect(res.ok()).toBeTruthy();
+    const listRes = await apiContext.post(`/api/svg/${drawId}/layers/list`);
+    const body = await listRes.json();
+    expect(body.layers[0].id).toBe('layer-sun');
+    expect(body.layers[body.layers.length - 1].id).toBe('layer-bg');
+  });
 });

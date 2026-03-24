@@ -878,6 +878,42 @@ export class SvgEngine {
     return { layerId, defsTransferred };
   }
 
+  /** Set or update the canvas background (a full-size rect behind all layers). */
+  setCanvasBackground(opts: {
+    color?: string;
+    gradient_id?: string;
+    opacity?: number;
+  }): boolean {
+    const viewBox = this.svgElement.getAttribute('viewBox') || '0 0 800 800';
+    const parts = viewBox.split(/\s+/).map(Number);
+    const [vbX, vbY, vbW, vbH] = [parts[0] || 0, parts[1] || 0, parts[2] || 800, parts[3] || 800];
+
+    let bgRect = this.svgElement.querySelector('#canvas-bg');
+    if (!bgRect) {
+      bgRect = this.document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bgRect.setAttribute('id', 'canvas-bg');
+      // Insert as first child (behind all layers), skip defs if present
+      const defs = this.svgElement.querySelector('defs');
+      const insertBefore = defs ? defs.nextElementSibling : this.svgElement.firstElementChild;
+      if (insertBefore) {
+        this.svgElement.insertBefore(bgRect, insertBefore);
+      } else {
+        this.svgElement.appendChild(bgRect);
+      }
+    }
+
+    bgRect.setAttribute('x', String(vbX));
+    bgRect.setAttribute('y', String(vbY));
+    bgRect.setAttribute('width', String(vbW));
+    bgRect.setAttribute('height', String(vbH));
+
+    if (opts.color) bgRect.setAttribute('fill', opts.color);
+    if (opts.gradient_id) bgRect.setAttribute('fill', `url(#${opts.gradient_id})`);
+    if (opts.opacity !== undefined) bgRect.setAttribute('opacity', String(opts.opacity));
+
+    return true;
+  }
+
   private _elementBBox(el: LElement): BBox | null {
     const tag = el.tagName.toLowerCase();
     if (tag === 'rect') {

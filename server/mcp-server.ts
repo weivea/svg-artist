@@ -297,6 +297,17 @@ server.tool(
   async (params) => textTool('canvas/viewbox', params),
 );
 
+server.tool(
+  'set_canvas_background',
+  'Set canvas background color or gradient. Creates or updates a full-size rect behind all layers.',
+  {
+    color: z.string().optional().describe('Background fill color (e.g. "#ffffff", "white")'),
+    gradient_id: z.string().optional().describe('Id of a gradient defined in <defs> to use as fill'),
+    opacity: z.number().optional().describe('Background opacity (0 to 1)'),
+  },
+  async (params) => textTool('canvas/background', params),
+);
+
 // ---------------------------------------------------------------------------
 // Preview (2)
 // ---------------------------------------------------------------------------

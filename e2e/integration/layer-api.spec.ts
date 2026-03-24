@@ -103,6 +103,35 @@ test.describe('Layer API — Query Operations', () => {
     expect(bgLayer.name).toBe('背景');
   });
 
+  test('set_canvas_background adds background rect', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    const res = await apiContext.post(`/api/svg/${drawId}/canvas/background`, {
+      data: { color: '#ffffff' },
+    });
+    expect(res.ok()).toBeTruthy();
+    const source = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const body = await source.json();
+    expect(body.svg).toContain('id="canvas-bg"');
+    expect(body.svg).toContain('fill="#ffffff"');
+  });
+
+  test('set_canvas_background updates existing background', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    await apiContext.post(`/api/svg/${drawId}/canvas/background`, {
+      data: { color: '#ffffff' },
+    });
+    await apiContext.post(`/api/svg/${drawId}/canvas/background`, {
+      data: { color: '#000000', opacity: 0.5 },
+    });
+    const source = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const body = await source.json();
+    expect(body.svg).toContain('fill="#000000"');
+    expect(body.svg).toContain('opacity="0.5"');
+    // Should only have one canvas-bg
+    const matches = body.svg.match(/id="canvas-bg"/g);
+    expect(matches).toHaveLength(1);
+  });
+
   test('list_layers returns visibility and opacity', async ({ apiContext }) => {
     const drawId = await setupLayeredDrawing(apiContext);
     await apiContext.post(`/api/svg/${drawId}/layers/opacity`, {

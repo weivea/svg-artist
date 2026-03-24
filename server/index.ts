@@ -412,6 +412,19 @@ app.post('/api/svg/:drawId/canvas/viewbox', async (req: Request, res: Response) 
   res.json({ ok: true });
 });
 
+app.post('/api/svg/:drawId/canvas/background', async (req: Request, res: Response) => {
+  const { color, gradient_id, opacity } = req.body as { color?: string; gradient_id?: string; opacity?: number };
+  const drawId = req.params.drawId as string;
+  const drawing = await drawingStore.get(drawId);
+  if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
+  const engine = new SvgEngine(drawing.svgContent);
+  engine.setCanvasBackground({ color, gradient_id, opacity });
+  const newSvg = engine.serialize();
+  await drawingStore.updateSvg(drawId, newSvg);
+  broadcastSvg(drawId, newSvg);
+  res.json({ ok: true });
+});
+
 // --- New Professional Tools API ---
 app.post('/api/svg/:drawId/filter/apply', async (req: Request, res: Response) => {
   const { layer_id, filter_type, params } = req.body as { layer_id?: string; filter_type?: string; params?: FilterParams };

@@ -318,7 +318,7 @@ export class SvgEngine {
   }
 
   /** Set style attributes on a layer <g> element */
-  setLayerStyle(layerId: string, styles: Record<string, string | number>): boolean {
+  setLayerStyle(layerId: string, styles: Record<string, string | number | null>): boolean {
     const g = this._findLayerElement(layerId);
     if (!g) return false;
 
@@ -331,6 +331,23 @@ export class SvgEngine {
 
     for (const [key, value] of Object.entries(styles)) {
       if (key === 'layer_id') continue; // skip the id param
+
+      // null means remove the attribute
+      if (value === null) {
+        if (key === 'mix_blend_mode') {
+          const existing = g.getAttribute('style') || '';
+          const cleaned = existing.replace(/mix-blend-mode:\s*[^;]+;?\s*/g, '').trim();
+          if (cleaned) {
+            g.setAttribute('style', cleaned);
+          } else {
+            g.removeAttribute('style');
+          }
+        } else {
+          const attrName = specialMappings[key] || key.replace(/_/g, '-');
+          g.removeAttribute(attrName);
+        }
+        continue;
+      }
 
       if (key === 'mix_blend_mode') {
         // mix-blend-mode must be set via style attribute

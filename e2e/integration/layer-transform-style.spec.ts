@@ -185,4 +185,19 @@ test.describe('Layer API — Transform & Style', () => {
     expect(svg).toContain('fill-opacity="0.5"');
     expect(svg).toContain('stroke-opacity="0.8"');
   });
+
+  test('set_layer_style null value removes attribute', async ({ apiContext }) => {
+    const drawId = await setupLayeredDrawing(apiContext);
+    await apiContext.post(`/api/svg/${drawId}/layers/style`, {
+      data: { layer_id: 'layer-sun', fill: '#ff0000', stroke: '#000000' },
+    });
+    await apiContext.post(`/api/svg/${drawId}/layers/style`, {
+      data: { layer_id: 'layer-sun', fill: null },
+    });
+    const source = await apiContext.post(`/api/svg/${drawId}/canvas/source`);
+    const body = await source.json();
+    const sunMatch = body.svg.match(/<g[^>]*id="layer-sun"[^>]*>/);
+    expect(sunMatch[0]).not.toContain('fill=');
+    expect(sunMatch[0]).toContain('stroke="#000000"');
+  });
 });

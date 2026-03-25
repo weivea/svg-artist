@@ -6,6 +6,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SVG Artist is a web-based drawing application with a React frontend and Node.js backend. Users describe artwork in natural language via an embedded Claude Code terminal (xterm.js), and Claude generates SVG content through a layer-based drawing system rendered in a live preview pane. The app supports multiple concurrent drawings, each with its own Claude CLI instance and isolated WebSocket channels. Claude operates as a master SVG artist with 39 built-in MCP tools for canvas setup, layer management, path & shape creation, typography, transforms, styles, effects, defs, preview, color palettes, composition critique, scratch canvases, self-bootstrapping, custom tools/routes/macros, and versioning, plus a drawing skills plugin loaded via `--plugin-dir` with 10 professional-grade skills, 2 agents, and 3 commands.
 
+## Browser-Based Web Search (chrome-devtools-mcp)
+
+This project uses `chrome-devtools-mcp` (configured in `.mcp.json`) to control a Chrome browser for web searches and content retrieval. **WebSearch is disabled** — use browser automation instead.
+
+**Workflow for searching the web:**
+1. `new_page` — Open a new tab to a search engine (e.g. `https://www.google.com`)
+2. `take_snapshot` — Read the page structure to find input elements
+3. `fill` — Type search query into the search input field
+4. `press_key` — Press Enter to submit the search
+5. `take_snapshot` — Read search results to find relevant links
+6. `click` — Click on a search result link
+7. `take_snapshot` — Extract content from the target page
+
+**Other useful chrome-devtools-mcp tools:**
+- `take_screenshot` — Capture visual screenshot of the page
+- `navigate_page` — Navigate to a URL directly, or go back/forward
+- `list_pages` / `select_page` — Manage multiple open tabs
+- `evaluate_script` — Run JavaScript on the page for advanced extraction
+- `wait_for` — Wait for specific text to appear on the page
+
 ## Commands
 
 ```bash

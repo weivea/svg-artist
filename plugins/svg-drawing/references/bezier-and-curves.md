@@ -1000,3 +1000,12 @@ Overly complex paths (from image tracing, freehand drawing, or data generation) 
 - **Control points too far away:** Creates unexpected loops or overshooting curves
 - **Mixing absolute/relative:** Be consistent within a segment; uppercase for absolute, lowercase for relative
 - **Arc flag confusion:** Remember: large-arc = which of the two arcs, sweep = which direction
+
+## Related References
+- `character-illustration.md` — Character poses and organic body shapes using curves
+- `hair-details.md` — Hair strand curves, braids, and flowing hair paths
+- `nature-and-environment.md` — Organic shapes for trees, leaves, waves, terrain
+- `animals-and-creatures.md` — Animal body contours, fur strokes, tentacles
+- `hands-and-feet.md` — Finger and toe curves at various detail levels
+- `icon-and-ui-design.md` — Precise icon paths, pixel-perfect curves
+- `patterns-and-motifs.md` — Celtic knots, vine scrolls, curved motif construction

@@ -1136,3 +1136,12 @@ Real objects weather over time. Add subtle weathering for realism:
 - Real materials are never perfectly uniform — always add some noise or variation
 - Light direction should be consistent across all materials in a scene
 - Consider filter render cost when adding multiple material filters to a single scene
+
+## Related References
+- `texture-details.md` — Fabric folds, leather, detailed material behavior
+- `lighting-and-shading.md` — Material-specific light response (specular for metal, SSS for skin)
+- `svg-filters-and-effects.md` — Filter chains for material effects (turbulence, lighting, displacement)
+- `color-and-gradients.md` — Gradient techniques for metallic, glass, and organic surfaces
+- `patterns-and-motifs.md` — Surface patterns (wood grain, marble veins, fabric weave)
+- `architecture-and-perspective.md` — Building materials (brick, stone, glass facade)
+- `nature-and-environment.md` — Natural materials (water, rock, bark, sand)

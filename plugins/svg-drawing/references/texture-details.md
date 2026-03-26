@@ -1574,3 +1574,11 @@ High-frequency noise (`baseFrequency` > 0.3) becomes indistinguishable mush at s
 | Transparency/glass          | Semi-transparent fills + gradient overlay |
 | Large background texture    | `<pattern>` (never filter)              |
 | Hero/close-up element       | Full filter chain (worth the cost)      |
+
+## Related References
+- `materials-and-textures.md` — Material-specific rendering (metal, glass, wood, stone, skin)
+- `character-illustration.md` — Clothing on characters, fold placement at pose joints
+- `lighting-and-shading.md` — Shadow direction affects fold shadow placement
+- `patterns-and-motifs.md` — Fabric patterns (plaid, stripe, floral) as `<pattern>` fills
+- `animals-and-creatures.md` — Fur, feather, and scale texture rendering
+- `svg-filters-and-effects.md` — Filter-based texture simulation (turbulence, displacement)

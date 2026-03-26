@@ -1300,3 +1300,12 @@ Follow this order when drawing hair to ensure consistent, professional results:
 - Are there flyaway strands breaking the silhouette?
 - Does the hair volume extend beyond the head outline?
 - Is the strand width consistent with the chosen style (anime: 2-4px, realistic: 0.5-1.5px)?
+
+## Related References
+- `character-illustration.md` — Character head proportions and style levels
+- `facial-details.md` — Face shape interaction with hairstyle framing
+- `bezier-and-curves.md` — Curve techniques for strand groups and flowing hair
+- `color-and-gradients.md` — Hair color formulas, highlight gradients
+- `lighting-and-shading.md` — Hair highlights, rim light on hair edges
+- `nature-and-environment.md` — Wind effects on hair, underwater hair movement
+- `animals-and-creatures.md` — Fur rendering, mane construction for animals

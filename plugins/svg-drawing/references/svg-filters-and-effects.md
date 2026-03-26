@@ -1771,3 +1771,11 @@ result-a + result-b → [Combine] → output
    ```
 5. **Avoid nesting more than 2 filter levels** (filter on group inside filtered group)
 6. **Keep total filter chain under 10 primitives** for consistent performance across browsers
+
+## Related References
+- `lighting-and-shading.md` — SVG lighting filters (feDiffuseLighting, feSpecularLighting) and shadow construction
+- `materials-and-textures.md` — Filter recipes for specific materials (metal, wood, stone)
+- `nature-and-environment.md` — Filter-based clouds, water ripples, fire, smoke
+- `illustration-styles.md` — Style-specific filter usage (watercolor, neon, vintage)
+- `color-and-gradients.md` — feColorMatrix for color manipulation
+- `patterns-and-motifs.md` — feTurbulence-based procedural texture patterns

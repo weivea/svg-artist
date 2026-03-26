@@ -1213,3 +1213,11 @@ Follow this order when constructing a face to ensure consistent, professional re
    - Features should be readable at small sizes (64×64 thumbnail)
    - Details should hold up at large sizes (full-screen display)
    - Test with `preview_as_png` at different DPI values
+
+## Related References
+- `character-illustration.md` — Full body proportions, pose, character design
+- `hair-details.md` — Hairstyles framing the face, bangs, sideburns
+- `hands-and-feet.md` — Hands near face (resting chin, covering mouth, etc.)
+- `lighting-and-shading.md` — Face lighting, Rembrandt triangle, subsurface scattering
+- `color-and-gradients.md` — Skin tone gradients, lip color, eye color construction
+- `animals-and-creatures.md` — Animal face construction, expression comparison

@@ -1376,3 +1376,12 @@ When creating a character in SVG, follow this order:
 8. **Apply consistent style** — Use the character sheet for colors, proportions, signature details
 9. **Add accessories** — Layer glasses, hats, scarves ON TOP of the base character
 10. **Self-review** — Preview as PNG and check: Does the pose read at thumbnail size? Is the expression clear? Do the proportions feel right?
+
+## Related References
+- `facial-details.md` — Detailed face construction, expressions, aging
+- `hair-details.md` — Hair structure, styles, highlights, braids
+- `hands-and-feet.md` — Hand poses, foot anatomy, shoes at all style levels
+- `texture-details.md` — Fabric folds, clothing material rendering
+- `lighting-and-shading.md` — Character lighting, rim light, subsurface scattering on skin
+- `animals-and-creatures.md` — Animal companions, mythical creature riders
+- `composition.md` — Character placement within scene, visual hierarchy

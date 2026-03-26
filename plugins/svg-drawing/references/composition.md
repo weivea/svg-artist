@@ -1220,3 +1220,11 @@ Before finalizing any SVG scene, verify:
 8. **Detail budget** — Is maximum detail concentrated on the focal area?
 9. **Layer count** — Are there at least 3 distinct depth zones?
 10. **Preview check** — Does it read at thumbnail size (50×50)?
+
+## Related References
+- `layer-workflow.md` — Layer ordering, naming, and critique framework
+- `lighting-and-shading.md` — Lighting composition rules, three-point lighting, chiaroscuro
+- `advanced-color-composition.md` — Color harmony, visual hierarchy, Gestalt grouping
+- `nature-and-environment.md` — Landscape composition, depth layers, horizon placement
+- `architecture-and-perspective.md` — Perspective systems, street scene composition
+- `icon-and-ui-design.md` — Compact composition within icon grid constraints

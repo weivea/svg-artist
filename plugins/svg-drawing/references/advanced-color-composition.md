@@ -918,3 +918,11 @@ Before finalizing any color scheme, verify:
 6. **Simultaneous contrast:** Do neutrals look "right" against their actual backgrounds?
 7. **Color grading:** Does a subtle feColorMatrix unify the scene mood?
 8. **Cultural context:** Are colors appropriate for target audience?
+
+## Related References
+- `color-and-gradients.md` — Practical gradient construction and HSL palette recipes
+- `lighting-and-shading.md` — Color temperature of light sources, atmospheric color shift
+- `composition.md` — Visual hierarchy, focal point emphasis through color
+- `illustration-styles.md` — Style-specific palette rules and constraints
+- `nature-and-environment.md` — Natural color palettes (sky, foliage, water, seasons)
+- `icon-and-ui-design.md` — WCAG contrast requirements, `currentColor` pattern

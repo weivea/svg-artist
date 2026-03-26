@@ -1393,3 +1393,11 @@ Avoid red-green gradients. Instead use:
 - Prefer `type="saturate"` and `type="hueRotate"` over the full `type="matrix"` when possible — they use optimized code paths
 - Use `objectBoundingBox` gradients when elements share the same visual style — one gradient definition serves many elements
 - Consider rasterizing complex gradient stacks as a PNG background for static scenes
+
+## Related References
+- `advanced-color-composition.md` — OKLCH perceptual color, accessibility, Gestalt principles
+- `lighting-and-shading.md` — Light color temperature, shadow color, time-of-day palettes
+- `materials-and-textures.md` — Material-specific gradient techniques (metal, glass, skin)
+- `nature-and-environment.md` — Sky gradient recipes, water color, seasonal palettes
+- `illustration-styles.md` — Style-specific color palettes and rules
+- `svg-filters-and-effects.md` — feColorMatrix for color manipulation, blend modes

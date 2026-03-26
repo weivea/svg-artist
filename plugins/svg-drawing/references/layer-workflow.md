@@ -1302,3 +1302,11 @@ Here's a complete workflow for drawing a sunset landscape:
 
 23. Done!
 ```
+
+## Related References
+- `composition.md` — Layout rules, visual hierarchy that informs layer ordering
+- `lighting-and-shading.md` — Shadow layers, lighting overlay layers
+- `illustration-styles.md` — Style-specific layer strategies and complexity budgets
+- `nature-and-environment.md` — Landscape depth layering (sky → mountains → midground → foreground)
+- `architecture-and-perspective.md` — Street scene layer order (8-layer stack)
+- `advanced-color-composition.md` — Color harmony checks during iteration passes

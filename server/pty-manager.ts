@@ -3,7 +3,6 @@ import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import type { WebSocket } from 'ws';
-import { loadAllPromptExtensions } from './bootstrap-store.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -51,14 +50,12 @@ export class PtyManager {
   inputBuffer: string = '';
   private _svgFilterState: SvgFilterState = 'passthrough';
   private _svgFilterBuffer: string = '';
-  private _lastSpawnOpts: SpawnOptions | null = null;
   private _dataHandler: { dispose: () => void } | null = null;
 
   /**
    * Spawn claude CLI in a real PTY.
    */
   async spawn(opts: SpawnOptions = {}): Promise<IPty> {
-    this._lastSpawnOpts = { ...opts };
     const mcpConfigPath = join(projectRoot, 'mcp-config.json');
     const pluginDir = join(projectRoot, 'plugins', 'svg-drawing');
 
@@ -180,23 +177,9 @@ export class PtyManager {
       '6. Rhythm — Does the eye flow naturally?',
       '7. Emphasis — Is there one clear star of the show?',
       '',
-      '**Step 2: Self-improvement analysis**',
-      'After your first complete version, **dispatch the bootstrap-reviewer agent**:',
-      '- It analyzes your canvas, layers, defs, and color usage',
-      '- It identifies capability gaps: missing filters, repetitive patterns,',
-      '  custom tools or macros that would improve your workflow',
-      '- It proposes specific, ready-to-use bootstrap improvements',
-      '',
-      'When to dispatch bootstrap-reviewer:',
-      '- After completing the first full version of any non-trivial drawing',
-      '- When you notice you\'re repeating the same multi-step sequence',
-      '- When the existing filters/styles don\'t capture the effect you need',
-      '',
       '**Step 3: Iterate**',
-      'Based on your self-critique and bootstrap-reviewer feedback:',
+      'Based on your self-critique:',
       '- Fix composition/color/detail issues (return to Phase 2 or 3)',
-      '- Implement suggested bootstrap improvements (write_filter, write_macro, etc.)',
-      '- reload_session if bootstrap changes were made',
       '- Final preview_as_png → Confirm the artwork is *great*, not just okay',
       '',
       '### Quality Standards',
@@ -214,32 +197,18 @@ export class PtyManager {
       '- Heavy filter chains (5+ primitives) slow rendering. Keep filters focused.',
       '- Large drawings (100+ elements) need layer grouping for organization.',
       '',
-      '### Self-Improvement',
-      'When your current tools can\'t express your vision:',
-      '- list_bootstrap_assets to check existing custom tools/macros',
-      '- write_filter / write_style / write_skill to create what you need',
-      '- write_custom_tool to define new pipeline-based tools',
-      '- write_macro to define reusable multi-step action sequences',
-      '- write_custom_route to define new API endpoints',
-      '- get_asset_history / rollback_asset to manage versions',
-      '- Batch writes, then reload_session once to apply all changes',
-      '',
-      '### Self-Improvement Decision Guide',
-      'Proactively identify opportunities to extend your capabilities:',
-      '- Repeating the same 3+ step sequence? → write_macro to encapsulate it',
-      '- Need a drawing effect that doesn\'t exist? → write_filter',
-      '- Adjusting the same style across layers? → write_style',
-      '- Notice a knowledge gap? → write_skill or write_prompt_extension',
-      '- Need a higher-level operation? → write_custom_tool',
-      '- Use /review for a detailed analysis of improvement opportunities',
-      '',
       '### Scratch Canvas Tools (for main agent)',
       '- create_scratch_canvas — Create temp canvas (also available to detail-painter)',
       '- merge_scratch_canvas — Merge completed scratch into main drawing (main agent only)',
       '- list_scratch_canvases — Check for orphaned scratch canvases',
     ].join('\n');
 
-    const layerGuide = await this.buildDynamicPrompt();
+    const layerGuide = [
+      'Layer conventions:',
+      '- Name format: layer-<description> (e.g., layer-sky, layer-tree-1)',
+      '- Build order: background → midground → foreground → details → effects',
+      '- All gradients/filters/patterns belong in <defs>, reference by url(#id)',
+    ].join('\n');
 
     const callbackUrl = opts.callbackUrl
       || `http://localhost:${process.env.PORT || 3000}/api/svg`;
@@ -279,21 +248,6 @@ export class PtyManager {
     });
 
     return this.ptyProcess;
-  }
-
-  private async buildDynamicPrompt(): Promise<string> {
-    const base = [
-      'Layer conventions:',
-      '- Name format: layer-<description> (e.g., layer-sky, layer-tree-1)',
-      '- Build order: background → midground → foreground → details → effects',
-      '- All gradients/filters/patterns belong in <defs>, reference by url(#id)',
-    ].join('\n');
-
-    const extensions = await loadAllPromptExtensions();
-    if (extensions) {
-      return base + '\n\n' + extensions;
-    }
-    return base;
   }
 
   /**
@@ -345,109 +299,6 @@ export class PtyManager {
       this.terminalWs = null;
       console.log('[PTY] WebSocket disconnected');
     });
-  }
-
-  /**
-   * Respawn the Claude CLI process with updated capabilities.
-   * Kills the current process, spawns a new one with --resume,
-   * reattaches the WebSocket, and injects a continuation prompt.
-   */
-  async respawn(reason?: string): Promise<void> {
-    const sessionId = this._lastSpawnOpts?.sessionId;
-    const callbackUrl = this._lastSpawnOpts?.callbackUrl;
-    const ws = this.terminalWs;
-
-    // Notify terminal
-    if (ws && ws.readyState === 1) {
-      ws.send('\r\n\x1b[33m[Reloading with upgraded capabilities...]\x1b[0m\r\n');
-    }
-
-    // Dispose existing data handler
-    if (this._dataHandler) {
-      this._dataHandler.dispose();
-      this._dataHandler = null;
-    }
-
-    // Kill current process
-    if (this.ptyProcess) {
-      this.ptyProcess.kill();
-      this.ptyProcess = null;
-    }
-
-    // Brief pause for process cleanup
-    await new Promise(r => setTimeout(r, 500));
-
-    // Respawn with resume
-    await this.spawn({
-      sessionId,
-      isResume: true,
-      callbackUrl,
-    });
-
-    // Reattach WebSocket to new PTY
-    if (ws && ws.readyState === 1) {
-      this.reattachWebSocket(ws);
-    }
-
-    // Wait for ready, then inject continuation prompt
-    this.waitForReadyAndInject(reason);
-  }
-
-  private reattachWebSocket(ws: WebSocket): void {
-    if (!this.ptyProcess) return;
-    this.terminalWs = ws;
-
-    this._dataHandler = this.ptyProcess.onData((data: string) => {
-      if (ws.readyState === 1) {
-        const filtered = this._filterSvgContent(data);
-        if (filtered) {
-          ws.send(filtered);
-        }
-      }
-    });
-  }
-
-  private waitForReadyAndInject(reason?: string): void {
-    if (!this.ptyProcess) return;
-
-    let injected = false;
-
-    // Debounce-based ready detection: when PTY output stops for 2s, assume ready
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    const outputHandler = this.ptyProcess.onData(() => {
-      if (injected) return;
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        if (!injected) {
-          injected = true;
-          outputHandler.dispose();
-          this.injectContinuationPrompt(reason);
-        }
-      }, 2000);
-    });
-
-    // Hard timeout fallback: 15 seconds
-    setTimeout(() => {
-      if (!injected) {
-        injected = true;
-        outputHandler.dispose();
-        if (debounceTimer) clearTimeout(debounceTimer);
-        this.injectContinuationPrompt(reason);
-      }
-    }, 15_000);
-  }
-
-  private injectContinuationPrompt(reason?: string): void {
-    if (!this.ptyProcess) return;
-
-    const message = [
-      'I just upgraded my capabilities:',
-      reason || 'System reload with latest changes',
-      '',
-      'Continue where I left off with the current task.',
-    ].join('\n');
-
-    this.ptyProcess.write(message + '\r');
   }
 
   /**

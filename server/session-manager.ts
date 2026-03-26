@@ -2,11 +2,6 @@ import { PtyManager } from './pty-manager.js';
 
 export class SessionManager {
   sessions: Map<string, PtyManager> = new Map();
-  private onReloadCallback?: () => Promise<void>;
-
-  setOnReload(cb: () => Promise<void>): void {
-    this.onReloadCallback = cb;
-  }
 
   /**
    * Get existing PtyManager for a drawId, or create a new one.
@@ -40,22 +35,6 @@ export class SessionManager {
       this.sessions.delete(drawId);
       console.log(`[SessionManager] Destroyed session for drawId=${drawId}, total=${this.sessions.size}`);
     }
-  }
-
-  /**
-   * Respawn (kill and recreate) a session for a drawId.
-   * Reloads global registries first, then respawns the CLI.
-   * Returns true if session existed and was respawned, false otherwise.
-   */
-  async respawn(drawId: string, reason?: string): Promise<boolean> {
-    // Reload global registries (custom routes, tools, macros)
-    if (this.onReloadCallback) {
-      await this.onReloadCallback();
-    }
-    const manager = this.sessions.get(drawId);
-    if (!manager) return false;
-    await manager.respawn(reason);
-    return true;
   }
 
   /**

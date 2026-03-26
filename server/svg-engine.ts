@@ -93,6 +93,23 @@ function hexToHsl(hex: string): { h: number; s: number; l: number } | null {
   return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
 }
 
+/**
+ * Expand self-closing XML/SVG tags to explicit open+close form.
+ *
+ * linkedom uses an HTML parser internally.  In HTML, only a fixed set of
+ * "void elements" (img, br, hr …) may be self-closed with `/>`.  SVG tags
+ * such as `<circle … />` are **not** void elements in HTML, so the parser
+ * treats them as *unclosed* opening tags and subsequent siblings become
+ * nested children — completely corrupting the DOM tree.
+ *
+ * This function converts every `<tag … />` into `<tag …></tag>` **before**
+ * the string is handed to linkedom's `innerHTML` setter or to `parseHTML()`
+ * with a `<body>` wrapper (both of which trigger the HTML parser path).
+ */
+export function expandSelfClosingTags(html: string): string {
+  return html.replace(/<([a-zA-Z][a-zA-Z0-9]*)((?:\s+[^>]*?)?)\/>/g, '<$1$2></$1>');
+}
+
 export class SvgEngine {
   private document: LDocument;
   private svgElement: LElement;
@@ -261,7 +278,7 @@ export class SvgEngine {
     const g = this.document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.setAttribute('id', id);
     g.setAttribute('data-name', name);
-    g.innerHTML = layerContent;
+    g.innerHTML = expandSelfClosingTags(layerContent);
 
     // Insert at position or append
     if (position !== undefined && position !== null) {
@@ -281,7 +298,7 @@ export class SvgEngine {
   updateLayer(layerId: string, content: string): boolean {
     const element = this._findLayerElement(layerId);
     if (!element) return false;
-    element.innerHTML = content;
+    element.innerHTML = expandSelfClosingTags(content);
     return true;
   }
 
@@ -750,7 +767,7 @@ export class SvgEngine {
         this.svgElement.insertBefore(defs, this.svgElement.firstChild);
       }
       // Parse content into temp doc
-      const { document: tempDoc } = parseHTML(`<!DOCTYPE html><html><body>${content}</body></html>`);
+      const { document: tempDoc } = parseHTML(`<!DOCTYPE html><html><body>${expandSelfClosingTags(content)}</body></html>`);
       const newEl = tempDoc.body.firstElementChild;
       if (!newEl) return false;
       defs.appendChild(newEl.cloneNode(true));
@@ -761,7 +778,7 @@ export class SvgEngine {
       if (!content || !defs) return false;
       const existing = defs.querySelector(`[id="${id}"]`);
       if (!existing) return false;
-      const { document: tempDoc } = parseHTML(`<!DOCTYPE html><html><body>${content}</body></html>`);
+      const { document: tempDoc } = parseHTML(`<!DOCTYPE html><html><body>${expandSelfClosingTags(content)}</body></html>`);
       const newEl = tempDoc.body.firstElementChild;
       if (!newEl) return false;
       existing.replaceWith(newEl.cloneNode(true));
@@ -1032,7 +1049,7 @@ export class SvgEngine {
         innerContent += scratchSvg.slice(openMatch.index, pos);
       }
     }
-    g.innerHTML = innerContent;
+    g.innerHTML = expandSelfClosingTags(innerContent);
 
     // Transfer defs
     let defsTransferred = 0;
@@ -1227,7 +1244,7 @@ export class SvgEngine {
       const layer = this._findLayerElement(opts.layer_id);
       if (!layer) return { ok: false, error: 'Layer not found' };
       // Parse the text SVG and append to the layer
-      const { document: tempDoc } = parseHTML(`<!DOCTYPE html><html><body>${textSvg}</body></html>`);
+      const { document: tempDoc } = parseHTML(`<!DOCTYPE html><html><body>${expandSelfClosingTags(textSvg)}</body></html>`);
       const newEl = tempDoc.body.firstElementChild;
       if (!newEl) return { ok: false, error: 'Failed to parse text element' };
       layer.appendChild(newEl.cloneNode(true));
@@ -1252,7 +1269,7 @@ export class SvgEngine {
     if (layerOpts?.layer_id) {
       const layer = this._findLayerElement(layerOpts.layer_id);
       if (!layer) return { ok: false, error: 'Layer not found' };
-      const { document: tempDoc } = parseHTML(`<!DOCTYPE html><html><body>${pathSvg}</body></html>`);
+      const { document: tempDoc } = parseHTML(`<!DOCTYPE html><html><body>${expandSelfClosingTags(pathSvg)}</body></html>`);
       const newEl = tempDoc.body.firstElementChild;
       if (!newEl) return { ok: false, error: 'Failed to parse path element' };
       layer.appendChild(newEl.cloneNode(true));

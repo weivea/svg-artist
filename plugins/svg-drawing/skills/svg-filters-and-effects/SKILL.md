@@ -1,6 +1,6 @@
 ---
 name: svg-filters-and-effects
-description: "SVG filter primitives, blend modes, masking, and ready-made effect recipes. Use when adding shadows, glow, texture, lighting, or any visual effect that requires <filter> elements."
+description: "Complete SVG filter engineering: all 17 filter primitives, chain construction, 20+ ready-made recipes, feTurbulence tuning, blend modes, advanced masking, color manipulation matrices, lighting rigs, displacement mapping, convolution kernels, filter animation, cross-browser compatibility, performance profiling, and debugging techniques."
 ---
 
 # SVG Filters & Effects
@@ -1036,3 +1036,743 @@ Masks can be combined with CSS animations or SMIL to create reveal effects:
 - **Nested filters** (filter on a group that contains filtered elements) multiply the performance cost. Flatten where possible.
 - **Masks + filters together** are expensive. Use them on small elements or final compositing layers, not on every shape.
 - **`filterUnits="userSpaceOnUse"`** can prevent unnecessary recomputation when elements are transformed.
+
+---
+
+## 7. Advanced Color Manipulation
+
+### 7.1 feColorMatrix Deep Dive
+
+The `feColorMatrix` is the most versatile color tool in SVG. The `type="matrix"` mode applies a 5×4 matrix multiplication to every pixel:
+
+```
+| R' |   | a00 a01 a02 a03 a04 |   | R |
+| G' | = | a10 a11 a12 a13 a14 | × | G |
+| B' |   | a20 a21 a22 a23 a24 |   | B |
+| A' |   | a30 a31 a32 a33 a34 |   | A |
+                                    | 1 |
+```
+
+The 5th column (a04, a14, a24, a34) adds constant offsets — this is how you shift color without input.
+
+#### Identity Matrix (no change)
+
+```xml
+<feColorMatrix type="matrix" values="
+  1 0 0 0 0
+  0 1 0 0 0
+  0 0 1 0 0
+  0 0 0 1 0"/>
+```
+
+#### Common Color Transformations
+
+**Sepia tone:**
+```xml
+<feColorMatrix type="matrix" values="
+  0.393 0.769 0.189 0 0
+  0.349 0.686 0.168 0 0
+  0.272 0.534 0.131 0 0
+  0     0     0     1 0"/>
+```
+
+**Night vision (green channel emphasis):**
+```xml
+<feColorMatrix type="matrix" values="
+  0.2 0.5 0.1 0 0
+  0.1 0.8 0.1 0 0.05
+  0   0.2 0.1 0 0
+  0   0   0   1 0"/>
+```
+
+**Warm shift (sunset):**
+```xml
+<feColorMatrix type="matrix" values="
+  1.2 0.1 0   0 0.05
+  0   1.0 0   0 0.02
+  0   0   0.8 0 0
+  0   0   0   1 0"/>
+```
+
+**Cool shift (moonlight):**
+```xml
+<feColorMatrix type="matrix" values="
+  0.8 0   0.1 0 0
+  0   0.9 0.1 0 0
+  0   0.1 1.2 0 0.05
+  0   0   0   1 0"/>
+```
+
+**Increase contrast:**
+```xml
+<feColorMatrix type="matrix" values="
+  1.5 0   0   0 -0.25
+  0   1.5 0   0 -0.25
+  0   0   1.5 0 -0.25
+  0   0   0   1 0"/>
+```
+
+**Decrease contrast (flatten):**
+```xml
+<feColorMatrix type="matrix" values="
+  0.7 0   0   0 0.15
+  0   0.7 0   0 0.15
+  0   0   0.7 0 0.15
+  0   0   0   1 0"/>
+```
+
+**Channel swap (R↔B for alien/fantasy effect):**
+```xml
+<feColorMatrix type="matrix" values="
+  0 0 1 0 0
+  0 1 0 0 0
+  1 0 0 0 0
+  0 0 0 1 0"/>
+```
+
+**Extract single channel as grayscale (red channel):**
+```xml
+<feColorMatrix type="matrix" values="
+  1 0 0 0 0
+  1 0 0 0 0
+  1 0 0 0 0
+  0 0 0 1 0"/>
+```
+
+### 7.2 feComponentTransfer Curves
+
+Where `feColorMatrix` applies a single linear transformation, `feComponentTransfer` gives you independent per-channel control with non-linear functions.
+
+#### Function Types
+
+| Type | Formula | Use case |
+|------|---------|----------|
+| `identity` | `C' = C` | No change (passthrough) |
+| `linear` | `C' = slope × C + intercept` | Brightness, contrast |
+| `gamma` | `C' = amplitude × C^exponent + offset` | Gamma correction, tone |
+| `table` | Piecewise linear interpolation | Custom tone curves |
+| `discrete` | Step function (quantize) | Posterization |
+
+#### S-Curve Contrast (Photographic)
+
+The most useful curve — boosts contrast by darkening darks and brightening lights:
+
+```xml
+<filter id="s-curve">
+  <feComponentTransfer>
+    <feFuncR type="table" tableValues="0 0.02 0.06 0.15 0.35 0.65 0.85 0.94 0.98 1"/>
+    <feFuncG type="table" tableValues="0 0.02 0.06 0.15 0.35 0.65 0.85 0.94 0.98 1"/>
+    <feFuncB type="table" tableValues="0 0.02 0.06 0.15 0.35 0.65 0.85 0.94 0.98 1"/>
+  </feComponentTransfer>
+</filter>
+```
+
+**How tableValues works:** The input range [0, 1] is divided into N-1 equal intervals (where N = number of values). Each value defines the output at that input point. Values between points are linearly interpolated.
+
+#### Posterization (Reduce Color Levels)
+
+```xml
+<filter id="posterize-4">
+  <feComponentTransfer>
+    <!-- 4 discrete levels per channel = 64 total colors -->
+    <feFuncR type="discrete" tableValues="0 0.33 0.67 1"/>
+    <feFuncG type="discrete" tableValues="0 0.33 0.67 1"/>
+    <feFuncB type="discrete" tableValues="0 0.33 0.67 1"/>
+  </feComponentTransfer>
+</filter>
+```
+
+#### Gamma Correction
+
+```xml
+<filter id="gamma-bright">
+  <feComponentTransfer>
+    <!-- exponent < 1 brightens, > 1 darkens -->
+    <feFuncR type="gamma" amplitude="1" exponent="0.6" offset="0"/>
+    <feFuncG type="gamma" amplitude="1" exponent="0.6" offset="0"/>
+    <feFuncB type="gamma" amplitude="1" exponent="0.6" offset="0"/>
+  </feComponentTransfer>
+</filter>
+```
+
+---
+
+## 8. Advanced Lighting Techniques
+
+### 8.1 Multi-Light Rig
+
+Real scenes have multiple light sources. Build a multi-light setup by running separate lighting primitives and compositing their results:
+
+```xml
+<filter id="two-light-rig" x="-5%" y="-5%" width="110%" height="110%">
+  <!-- Generate surface normal from alpha -->
+  <!-- Key light (strong, directional) -->
+  <feDiffuseLighting in="SourceAlpha" surfaceScale="3" diffuseConstant="1"
+                     result="key-light">
+    <feDistantLight azimuth="225" elevation="50"/>
+  </feDiffuseLighting>
+
+  <!-- Fill light (softer, from opposite side) -->
+  <feDiffuseLighting in="SourceAlpha" surfaceScale="2" diffuseConstant="0.4"
+                     result="fill-light">
+    <feDistantLight azimuth="45" elevation="35"/>
+  </feDiffuseLighting>
+
+  <!-- Specular highlight from key light -->
+  <feSpecularLighting in="SourceAlpha" surfaceScale="3"
+                      specularConstant="0.8" specularExponent="30"
+                      result="specular">
+    <feDistantLight azimuth="225" elevation="50"/>
+  </feSpecularLighting>
+
+  <!-- Combine: original + key + fill + specular -->
+  <feComposite in="key-light" in2="fill-light" operator="arithmetic"
+               k1="0" k2="0.7" k3="0.3" k4="0" result="combined-light"/>
+  <feComposite in="SourceGraphic" in2="combined-light" operator="arithmetic"
+               k1="0" k2="0.6" k3="0.5" k4="0" result="lit"/>
+  <feComposite in="specular" in2="SourceAlpha" operator="in" result="spec-clip"/>
+  <feBlend in="lit" in2="spec-clip" mode="screen"/>
+</filter>
+```
+
+### 8.2 Light Type Comparison
+
+| Light type | Element | Use case | Effect |
+|-----------|---------|----------|--------|
+| **Distant** | `<feDistantLight>` | Sun, moon, general ambient | Even lighting across surface, no falloff |
+| **Point** | `<fePointLight>` | Lamp, candle, spotlight | Falls off with distance from source |
+| **Spot** | `<feSpotLight>` | Focused beam, flashlight | Cone of light with falloff at edges |
+
+**feSpotLight parameters:**
+- `x`, `y`, `z` — Light position
+- `pointsAtX`, `pointsAtY`, `pointsAtZ` — Where the spotlight aims
+- `specularExponent` — Cone tightness (higher = narrower beam)
+- `limitingConeAngle` — Hard cutoff angle in degrees
+
+```xml
+<feSpecularLighting surfaceScale="4" specularExponent="20" specularConstant="1">
+  <feSpotLight x="200" y="50" z="300"
+               pointsAtX="200" pointsAtY="200" pointsAtZ="0"
+               specularExponent="15" limitingConeAngle="30"/>
+</feSpecularLighting>
+```
+
+### 8.3 Ambient Occlusion Simulation
+
+Simulate soft shadows in crevices and corners where ambient light is blocked:
+
+```xml
+<filter id="ambient-occlusion" x="-5%" y="-5%" width="110%" height="110%">
+  <!-- Dilate the alpha slightly -->
+  <feMorphology in="SourceAlpha" operator="dilate" radius="2" result="expanded"/>
+  <!-- Blur the expanded alpha -->
+  <feGaussianBlur in="expanded" stdDeviation="4" result="ao-shadow"/>
+  <!-- Darken and clip -->
+  <feFlood flood-color="#000000" flood-opacity="0.3" result="dark"/>
+  <feComposite in="dark" in2="ao-shadow" operator="in" result="ao"/>
+  <!-- Subtract original shape to leave only the shadow -->
+  <feComposite in="ao" in2="SourceAlpha" operator="out" result="ao-only"/>
+  <!-- Layer behind original -->
+  <feMerge>
+    <feMergeNode in="ao-only"/>
+    <feMergeNode in="SourceGraphic"/>
+  </feMerge>
+</filter>
+```
+
+---
+
+## 9. Advanced Displacement Techniques
+
+### 9.1 feDisplacementMap Explained
+
+Displacement maps shift each pixel's position based on the color values of a displacement source:
+
+```
+newX = originalX + scale × (displacement.channelX - 0.5)
+newY = originalY + scale × (displacement.channelY - 0.5)
+```
+
+Values at 0.5 (128 in 8-bit) = no displacement. Values > 0.5 shift positive, < 0.5 shift negative.
+
+### 9.2 Controlled Displacement Patterns
+
+**Horizontal wave (flag ripple):**
+```xml
+<filter id="flag-wave">
+  <feTurbulence type="turbulence" baseFrequency="0.005 0.05" numOctaves="2"
+                seed="10" result="wave"/>
+  <feDisplacementMap in="SourceGraphic" in2="wave" scale="20"
+                     xChannelSelector="R" yChannelSelector="G"/>
+</filter>
+```
+
+**Circular distortion (lens effect):**
+```xml
+<filter id="lens-distort">
+  <!-- Radial gradient as displacement source -->
+  <feFlood flood-color="rgb(128,128,128)" result="gray"/>
+  <!-- Use SourceAlpha as a radial displacement source -->
+  <feGaussianBlur in="SourceAlpha" stdDeviation="15" result="radial"/>
+  <feDisplacementMap in="SourceGraphic" in2="radial" scale="25"
+                     xChannelSelector="R" yChannelSelector="G"/>
+</filter>
+```
+
+**Heat shimmer (atmospheric distortion):**
+```xml
+<filter id="heat-shimmer" x="-5%" y="-5%" width="110%" height="110%">
+  <feTurbulence type="turbulence" baseFrequency="0.02 0.06" numOctaves="2"
+                seed="42" result="shimmer"/>
+  <feDisplacementMap in="SourceGraphic" in2="shimmer" scale="8"
+                     xChannelSelector="R" yChannelSelector="G"/>
+</filter>
+```
+
+### 9.3 Displacement Scale Guide
+
+| Effect | Scale value | baseFrequency |
+|--------|-------------|---------------|
+| Subtle texture | 2–5 | 0.1–0.3 |
+| Watercolor edge | 8–15 | 0.02–0.05 |
+| Water reflection | 10–20 | 0.01–0.03 |
+| Heat shimmer | 5–10 | 0.02–0.06 |
+| Explosion/shatter | 20–50 | 0.01–0.02 |
+| Glass refraction | 3–8 | 0.05–0.1 |
+| Flag wave | 15–25 | 0.005–0.01 |
+| Rough stone edge | 3–6 | 0.05–0.1 |
+
+---
+
+## 10. Convolution Matrix Guide
+
+### 10.1 feConvolveMatrix Basics
+
+Applies a custom convolution kernel to the image. Extremely powerful for edge detection, sharpening, and embossing.
+
+```xml
+<filter id="convolution">
+  <feConvolveMatrix order="3"
+    kernelMatrix="values..."
+    divisor="auto"
+    bias="0"
+    preserveAlpha="true"/>
+</filter>
+```
+
+- `order` — Kernel size (3 = 3×3, 5 = 5×5). Larger = more computation.
+- `kernelMatrix` — Space-separated values, read left-to-right, top-to-bottom.
+- `divisor` — Sum of positive values (auto-calculated if omitted). Normalizes output.
+- `bias` — Added to each output pixel (use 0.5 for emboss to center around gray).
+- `preserveAlpha` — If `true`, alpha channel is not convolved.
+
+### 10.2 Common Kernels
+
+**Sharpen (3×3):**
+```xml
+<feConvolveMatrix order="3"
+  kernelMatrix="0  -1  0
+               -1   5 -1
+                0  -1  0"
+  preserveAlpha="true"/>
+```
+
+**Edge detect (Laplacian):**
+```xml
+<feConvolveMatrix order="3"
+  kernelMatrix="-1 -1 -1
+               -1  8 -1
+               -1 -1 -1"
+  preserveAlpha="true" bias="0.5"/>
+```
+
+**Emboss (directional):**
+```xml
+<feConvolveMatrix order="3"
+  kernelMatrix="-2 -1  0
+               -1  1  1
+                0  1  2"
+  preserveAlpha="true" bias="0.5"/>
+```
+
+**Unsharp mask (5×5):**
+```xml
+<feConvolveMatrix order="5"
+  kernelMatrix="0  0 -1  0  0
+                0 -1 -2 -1  0
+               -1 -2 16 -2 -1
+                0 -1 -2 -1  0
+                0  0 -1  0  0"
+  preserveAlpha="true"/>
+```
+
+**Horizontal motion blur (1×5):**
+```xml
+<feConvolveMatrix order="5 1"
+  kernelMatrix="0.2 0.2 0.2 0.2 0.2"
+  preserveAlpha="true"/>
+```
+
+---
+
+## 11. Filter Animation
+
+### 11.1 Animating Filter Parameters
+
+Many filter parameters can be animated using SMIL `<animate>` elements:
+
+**Pulsing glow:**
+```xml
+<filter id="pulse-glow">
+  <feGaussianBlur in="SourceGraphic" result="blur">
+    <animate attributeName="stdDeviation" values="2;8;2"
+             dur="2s" repeatCount="indefinite"/>
+  </feGaussianBlur>
+  <feMerge>
+    <feMergeNode in="blur"/>
+    <feMergeNode in="SourceGraphic"/>
+  </feMerge>
+</filter>
+```
+
+**Animated turbulence (flowing water):**
+```xml
+<filter id="flowing-water">
+  <feTurbulence type="turbulence" baseFrequency="0.01 0.05" numOctaves="3"
+                result="water">
+    <animate attributeName="seed" from="1" to="100"
+             dur="5s" repeatCount="indefinite"/>
+  </feTurbulence>
+  <feDisplacementMap in="SourceGraphic" in2="water" scale="12"
+                     xChannelSelector="R" yChannelSelector="G"/>
+</filter>
+```
+
+**Color cycling via animated feColorMatrix:**
+```xml
+<filter id="color-cycle">
+  <feColorMatrix type="hueRotate">
+    <animate attributeName="values" from="0" to="360"
+             dur="10s" repeatCount="indefinite"/>
+  </feColorMatrix>
+</filter>
+```
+
+### 11.2 Animatable Filter Properties
+
+| Filter primitive | Animatable properties |
+|-----------------|---------------------|
+| feGaussianBlur | `stdDeviation` |
+| feOffset | `dx`, `dy` |
+| feFlood | `flood-color`, `flood-opacity` |
+| feTurbulence | `baseFrequency`, `seed` |
+| feDisplacementMap | `scale` |
+| feColorMatrix | `values` (all types) |
+| feMorphology | `radius` |
+| feConvolveMatrix | `kernelMatrix`, `bias` |
+| feComponentTransfer | `slope`, `intercept`, `amplitude`, `exponent`, `offset` |
+| feDiffuseLighting | `surfaceScale`, `diffuseConstant` |
+| feSpecularLighting | `surfaceScale`, `specularConstant`, `specularExponent` |
+| fePointLight | `x`, `y`, `z` |
+| feSpotLight | All position/direction attributes |
+| feDistantLight | `azimuth`, `elevation` |
+
+---
+
+## 12. Advanced Recipe Collection
+
+### 12.1 Chromatic Aberration
+
+Simulates lens color fringing by offsetting color channels:
+
+```xml
+<filter id="chromatic-aberration" x="-5%" y="-5%" width="110%" height="110%">
+  <!-- Extract red channel, offset left -->
+  <feColorMatrix in="SourceGraphic" type="matrix" values="
+    1 0 0 0 0
+    0 0 0 0 0
+    0 0 0 0 0
+    0 0 0 1 0" result="red"/>
+  <feOffset in="red" dx="-3" dy="0" result="red-shifted"/>
+
+  <!-- Extract blue channel, offset right -->
+  <feColorMatrix in="SourceGraphic" type="matrix" values="
+    0 0 0 0 0
+    0 0 0 0 0
+    0 0 1 0 0
+    0 0 0 1 0" result="blue"/>
+  <feOffset in="blue" dx="3" dy="0" result="blue-shifted"/>
+
+  <!-- Green stays in place -->
+  <feColorMatrix in="SourceGraphic" type="matrix" values="
+    0 0 0 0 0
+    0 1 0 0 0
+    0 0 0 0 0
+    0 0 0 1 0" result="green"/>
+
+  <!-- Combine channels -->
+  <feBlend in="red-shifted" in2="green" mode="screen" result="rg"/>
+  <feBlend in="rg" in2="blue-shifted" mode="screen"/>
+</filter>
+```
+
+### 12.2 Duotone Effect
+
+Converts image to two-color tone mapping:
+
+```xml
+<filter id="duotone-blue-orange">
+  <!-- Convert to grayscale -->
+  <feColorMatrix type="saturate" values="0" result="gray"/>
+  <!-- Map: shadows → dark blue, highlights → orange -->
+  <feComponentTransfer in="gray">
+    <feFuncR type="table" tableValues="0.1 0.95"/>
+    <feFuncG type="table" tableValues="0.15 0.55"/>
+    <feFuncB type="table" tableValues="0.45 0.2"/>
+  </feComponentTransfer>
+</filter>
+```
+
+Change `tableValues` to map to different color pairs:
+- **Shadow-to-highlight mapping**: First value = shadow color channel, second = highlight color channel
+- Purple/gold: R `0.3 0.95`, G `0.1 0.75`, B `0.5 0.1`
+- Teal/magenta: R `0.1 0.9`, G `0.4 0.2`, B `0.45 0.6`
+
+### 12.3 Vintage Film Grain
+
+```xml
+<filter id="film-grain" x="0" y="0" width="100%" height="100%">
+  <!-- Base grain -->
+  <feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="3"
+                seed="1" result="grain"/>
+  <feColorMatrix in="grain" type="saturate" values="0" result="bw-grain"/>
+
+  <!-- Reduce grain intensity -->
+  <feComponentTransfer in="bw-grain" result="soft-grain">
+    <feFuncR type="linear" slope="0.15" intercept="0.425"/>
+    <feFuncG type="linear" slope="0.15" intercept="0.425"/>
+    <feFuncB type="linear" slope="0.15" intercept="0.425"/>
+  </feComponentTransfer>
+
+  <!-- Vignette (darkened edges) -->
+  <feFlood flood-color="black" result="black"/>
+  <feComposite in="black" in2="SourceAlpha" operator="in" result="black-clip"/>
+  <feGaussianBlur in="black-clip" stdDeviation="40" result="vignette-blur"/>
+  <feComponentTransfer in="vignette-blur" result="vignette">
+    <feFuncA type="table" tableValues="0.3 0.1 0 0 0 0.1 0.3"/>
+  </feComponentTransfer>
+
+  <!-- Combine: original + grain + vignette -->
+  <feBlend in="SourceGraphic" in2="soft-grain" mode="multiply" result="grained"/>
+  <feBlend in="grained" in2="vignette" mode="multiply"/>
+</filter>
+```
+
+### 12.4 X-Ray / Invert Effect
+
+```xml
+<filter id="xray">
+  <!-- Invert colors -->
+  <feComponentTransfer>
+    <feFuncR type="table" tableValues="1 0"/>
+    <feFuncG type="table" tableValues="1 0"/>
+    <feFuncB type="table" tableValues="1 0"/>
+  </feComponentTransfer>
+  <!-- Desaturate partially for medical look -->
+  <feColorMatrix type="saturate" values="0.15"/>
+  <!-- Slight blue tint -->
+  <feColorMatrix type="matrix" values="
+    0.8 0   0   0 0
+    0   0.9 0   0 0.05
+    0   0   1.1 0 0.1
+    0   0   0   1 0"/>
+</filter>
+```
+
+### 12.5 Frosted Glass Overlay
+
+```xml
+<filter id="frosted-overlay" x="-5%" y="-5%" width="110%" height="110%">
+  <!-- Blur the background -->
+  <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blurred"/>
+  <!-- Add noise texture -->
+  <feTurbulence type="fractalNoise" baseFrequency="0.4" numOctaves="3"
+                result="frost-noise"/>
+  <feColorMatrix in="frost-noise" type="saturate" values="0" result="frost-gray"/>
+  <!-- Combine blur with frost -->
+  <feBlend in="blurred" in2="frost-gray" mode="overlay" result="frosted"/>
+  <!-- Lighten slightly -->
+  <feComponentTransfer in="frosted">
+    <feFuncR type="linear" slope="0.85" intercept="0.15"/>
+    <feFuncG type="linear" slope="0.85" intercept="0.15"/>
+    <feFuncB type="linear" slope="0.85" intercept="0.15"/>
+  </feComponentTransfer>
+</filter>
+```
+
+### 12.6 Outline / Stroke Effect (via Filter)
+
+Create an outline around any element without modifying its stroke:
+
+```xml
+<filter id="outline-effect" x="-10%" y="-10%" width="120%" height="120%">
+  <!-- Expand the alpha channel -->
+  <feMorphology in="SourceAlpha" operator="dilate" radius="3" result="expanded"/>
+  <!-- Color the expanded region -->
+  <feFlood flood-color="#FF0000" result="color"/>
+  <feComposite in="color" in2="expanded" operator="in" result="colored-outline"/>
+  <!-- Layer: outline behind original -->
+  <feMerge>
+    <feMergeNode in="colored-outline"/>
+    <feMergeNode in="SourceGraphic"/>
+  </feMerge>
+</filter>
+```
+
+---
+
+## 13. Debugging & Troubleshooting
+
+### 13.1 Common Filter Problems
+
+| Symptom | Likely cause | Fix |
+|---------|-------------|-----|
+| Filter output is all black | Missing `in` attribute | Explicitly set `in="SourceGraphic"` on first primitive |
+| Element disappears | Filter region too small | Add `x="-20%" y="-20%" width="140%" height="140%"` |
+| Blur looks clipped | Default filter region clips blur | Increase filter region percentages |
+| Colors look wrong | feColorMatrix values off | Check matrix math — use identity matrix as baseline |
+| Glow only appears on one side | Filter region asymmetric | Center the filter region with negative x/y |
+| Performance very slow | Too many high-cost primitives | Reduce blur radius, turbulence octaves, or filter region |
+| Filter works in Chrome but not Safari | Browser implementation differences | Test with simpler filter chain |
+| Turbulence looks different on each render | `seed` attribute not set | Always specify `seed` for reproducible results |
+
+### 13.2 Debugging Strategy
+
+When a filter doesn't produce the expected result:
+
+```
+1. Isolate: Apply the filter to a simple rectangle to rule out element issues
+2. Build incrementally: Start with one primitive, add one at a time
+3. Use named results: Give every intermediate `result` a descriptive name
+4. Test each stage: Temporarily route intermediate results to output
+   → Set the last <feMergeNode in="intermediate-name"/> to see that stage
+5. Check region: Temporarily set filter region to x="-50%" y="-50%" width="200%" height="200%"
+6. Check inputs: Ensure each primitive's `in` references an existing result
+7. Validate math: For feColorMatrix, multiply sample pixel values by hand
+```
+
+### 13.3 Filter Result Naming Convention
+
+Use a consistent naming scheme for filter intermediate results:
+
+```
+Source stages:    src-alpha, src-graphic
+Processing:       blurred, offset, expanded, tinted
+Lighting:         key-light, fill-light, specular, combined-light
+Color:            grayscale, warm-shifted, posterized
+Noise:            noise, grain, turbulence, frost
+Compositing:      clipped, masked, blended, merged
+Final stages:     pre-final, final
+```
+
+### 13.4 Performance Profiling Approach
+
+When a filter chain is too slow:
+
+```
+1. Measure baseline: Time the render without any filters
+2. Add filters one at a time: Identify the expensive primitive
+3. Optimize the bottleneck:
+   - feGaussianBlur: Reduce stdDeviation
+   - feTurbulence: Reduce numOctaves (each one doubles cost)
+   - feDisplacementMap: Reduce scale
+   - feConvolveMatrix: Use 3×3 instead of 5×5
+   - Lighting primitives: Reduce surfaceScale
+4. Shrink filter region: Every pixel in the region is processed
+5. Consider pre-rendering: For static elements, render to PNG and use <image>
+```
+
+---
+
+## 14. Filter Chain Design Patterns
+
+### 14.1 The Sandwich Pattern
+
+Many effects follow this structure: process the input, then layer the result with the original.
+
+```
+SourceGraphic → [Process] → result
+SourceGraphic + result → [Blend/Merge] → output
+```
+
+Example (soft focus):
+```xml
+<filter id="soft-focus">
+  <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="soft"/>
+  <feBlend in="SourceGraphic" in2="soft" mode="normal" result="blended">
+    <!-- Use feComposite arithmetic for custom mix: 70% sharp + 30% soft -->
+  </feBlend>
+  <feComposite in="SourceGraphic" in2="soft" operator="arithmetic"
+               k1="0" k2="0.7" k3="0.3" k4="0"/>
+</filter>
+```
+
+### 14.2 The Alpha Mask Pattern
+
+Extract shape → process → clip back to shape. Used for effects that need to stay within the element's bounds.
+
+```
+SourceAlpha → [Process (blur, flood, etc.)] → processed
+processed + SourceAlpha → feComposite operator="in" → clipped
+clipped + SourceGraphic → feMerge → output
+```
+
+### 14.3 The Texture Overlay Pattern
+
+Generate texture → color/tone it → blend with original.
+
+```
+feTurbulence → feColorMatrix (tone) → texture
+SourceGraphic + texture → feBlend (multiply/overlay/screen) → output
+```
+
+### 14.4 The Dual-Path Pattern
+
+Process the input two different ways, then combine:
+
+```
+SourceGraphic → [Path A: e.g., blur] → result-a
+SourceGraphic → [Path B: e.g., edge detect] → result-b
+result-a + result-b → [Combine] → output
+```
+
+---
+
+## 15. Cross-Browser Compatibility
+
+### 15.1 Known Differences
+
+| Feature | Chrome/Edge | Firefox | Safari |
+|---------|------------|---------|--------|
+| `feDropShadow` | ✅ | ✅ | ✅ (14.1+) |
+| `feTurbulence` seed consistency | Varies | Consistent | Varies |
+| `feComposite arithmetic` | Full support | Full support | Occasional issues |
+| `feConvolveMatrix` | Full support | Full support | May be slow |
+| `feSpecularLighting` | Full support | Full support | Slight color diff |
+| `mix-blend-mode` on SVG | ✅ | ✅ | ⚠️ (some modes) |
+| Filter animation (SMIL) | ✅ | ✅ | ⚠️ (limited) |
+| `color-interpolation-filters` | Default: `linearRGB` | Default: `linearRGB` | Default: `linearRGB` |
+
+### 15.2 Safe Practices
+
+1. **Always set `seed`** on `feTurbulence` for reproducible results
+2. **Test complex chains** in all target browsers early
+3. **Prefer `feGaussianBlur` + `feOffset` + `feComposite`** over `feDropShadow` for maximum compatibility
+4. **Use `color-interpolation-filters="sRGB"`** when you need consistent color behavior:
+   ```xml
+   <filter id="my-filter" color-interpolation-filters="sRGB">
+     <!-- Filter primitives -->
+   </filter>
+   ```
+5. **Avoid nesting more than 2 filter levels** (filter on group inside filtered group)
+6. **Keep total filter chain under 10 primitives** for consistent performance across browsers

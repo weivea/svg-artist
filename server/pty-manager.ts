@@ -4,7 +4,6 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import type { WebSocket } from 'ws';
 import { loadAllPromptExtensions } from './bootstrap-store.js';
-import { buildSkillRegistry, registryToPrompt } from './skill-registry.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -268,20 +267,11 @@ export class PtyManager {
   }
 
   private async buildDynamicPrompt(): Promise<string> {
-    const pluginDir = join(projectRoot, 'plugins', 'svg-drawing');
-    const skillsDir = join(pluginDir, 'skills');
-
-    // Build skill registry from directory tree
-    const registry = await buildSkillRegistry(skillsDir);
-    const skillTree = registryToPrompt(registry);
-
     const base = [
       'Layer conventions:',
       '- Name format: layer-<description> (e.g., layer-sky, layer-tree-1)',
       '- Build order: background → midground → foreground → details → effects',
       '- All gradients/filters/patterns belong in <defs>, reference by url(#id)',
-      '',
-      skillTree,
     ].join('\n');
 
     const extensions = await loadAllPromptExtensions();

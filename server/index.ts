@@ -12,27 +12,8 @@ import { renderSvgToPng, renderLayerToPng } from './png-renderer.js';
 import { generatePalettes } from './color-palettes.js';
 import { analyzeComposition } from './composition-analyzer.js';
 import type { FilterParams } from './filter-templates.js';
-import { generateFilterOrCustom } from './filter-templates.js';
+import { generateFilter } from './filter-templates.js';
 import type { StylePreset } from './style-presets.js';
-import {
-  validateName, validateSkillContent, validateFilterDefinition,
-  validateStyleDefinition, validatePromptExtension,
-  validateCustomToolDefinition, validateCustomRouteDefinition,
-  validateMacroDefinition,
-  validateRollback,
-} from './bootstrap-validator.js';
-import {
-  writeSkill, writeCustomFilter, writeCustomStyle,
-  writePromptExtension as storeWritePromptExtension,
-  listAllAssets,
-  writeCustomTool, loadCustomTool,
-  writeCustomRoute, loadCustomRoute,
-  writeCustomMacro, loadCustomMacro,
-  getAssetHistory, rollbackAsset,
-} from './bootstrap-store.js';
-import { executePipeline } from './pipeline-engine.js';
-import type { PipelineContext, PipelineDeps } from './pipeline-engine.js';
-import { routeRegistry } from './custom-route-registry.js';
 import { ScratchCanvasStore } from './scratch-canvas-store.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -50,21 +31,6 @@ app.use(express.static(join(__dirname, '..', 'dist')));
 const sessionManager = new SessionManager();
 const drawingStore = new DrawingStore();
 const scratchStore = new ScratchCanvasStore();
-
-// Pipeline execution dependencies (used by custom tools and routes)
-const pipelineDeps: PipelineDeps = {
-  getSvgEngine: async (drawId: string) => {
-    const drawing = await drawingStore.get(drawId);
-    if (!drawing) return null;
-    return new SvgEngine(drawing.svgContent);
-  },
-  saveSvg: async (drawId: string, svg: string) => {
-    await drawingStore.updateSvg(drawId, svg);
-  },
-  broadcastSvg: (drawId: string, svg: string) => {
-    broadcastSvg(drawId, svg);
-  },
-};
 
 // --- WebSocket servers (noServer mode) ---
 const svgWss = new WebSocketServer({ noServer: true });
@@ -554,7 +520,7 @@ app.post('/api/svg/:drawId/filter/apply', async (req: Request, res: Response) =>
   const drawing = await drawingStore.get(drawId);
   if (!drawing) { res.status(404).json({ error: 'Drawing not found' }); return; }
 
-  const filterResult = await generateFilterOrCustom(filter_type, params);
+  const filterResult = generateFilter(filter_type as any, params);
   if (!filterResult) { res.status(400).json({ error: `Unknown filter type: ${filter_type}` }); return; }
 
   const engine = new SvgEngine(drawing.svgContent);
@@ -651,206 +617,6 @@ app.post('/api/svg/:drawId/canvas/bbox', async (req: Request, res: Response) => 
   const bbox = engine.getElementBBox(element_id);
   if (!bbox) { res.status(404).json({ error: 'Element not found' }); return; }
   res.json(bbox);
-});
-
-// --- Bootstrap / Self-improvement API ---
-
-app.post('/api/svg/:drawId/bootstrap/write-skill', async (req: Request, res: Response) => {
-  const { name, content } = req.body as { name?: string; content?: string };
-  if (!name || !content) { res.status(400).json({ error: 'Missing name or content' }); return; }
-  const nameCheck = validateName(name);
-  if (!nameCheck.ok) { res.status(400).json({ error: nameCheck.error }); return; }
-  const contentCheck = validateSkillContent(content);
-  if (!contentCheck.ok) { res.status(400).json({ error: contentCheck.error }); return; }
-  try {
-    await writeSkill(name, content);
-    res.json({ ok: true, path: `plugins/svg-drawing/skills/${name}/SKILL.md` });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: `Failed to write skill: ${msg}` });
-  }
-});
-
-app.post('/api/svg/:drawId/bootstrap/write-filter', async (req: Request, res: Response) => {
-  const { name, definition } = req.body as { name?: string; definition?: any };
-  if (!name || !definition) { res.status(400).json({ error: 'Missing name or definition' }); return; }
-  const nameCheck = validateName(name);
-  if (!nameCheck.ok) { res.status(400).json({ error: nameCheck.error }); return; }
-  const defCheck = validateFilterDefinition(definition);
-  if (!defCheck.ok) { res.status(400).json({ error: defCheck.error }); return; }
-  try {
-    await writeCustomFilter(name, definition);
-    res.json({ ok: true, path: `data/bootstrap/custom-filters/${name}.json` });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: `Failed to write filter: ${msg}` });
-  }
-});
-
-app.post('/api/svg/:drawId/bootstrap/write-style', async (req: Request, res: Response) => {
-  const { name, definition } = req.body as { name?: string; definition?: any };
-  if (!name || !definition) { res.status(400).json({ error: 'Missing name or definition' }); return; }
-  const nameCheck = validateName(name);
-  if (!nameCheck.ok) { res.status(400).json({ error: nameCheck.error }); return; }
-  const defCheck = validateStyleDefinition(definition);
-  if (!defCheck.ok) { res.status(400).json({ error: defCheck.error }); return; }
-  try {
-    await writeCustomStyle(name, definition);
-    res.json({ ok: true, path: `data/bootstrap/custom-styles/${name}.json` });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: `Failed to write style: ${msg}` });
-  }
-});
-
-app.post('/api/svg/:drawId/bootstrap/write-prompt-extension', async (req: Request, res: Response) => {
-  const { name, content } = req.body as { name?: string; content?: string };
-  if (!name || !content) { res.status(400).json({ error: 'Missing name or content' }); return; }
-  const nameCheck = validateName(name);
-  if (!nameCheck.ok) { res.status(400).json({ error: nameCheck.error }); return; }
-  const contentCheck = validatePromptExtension(content);
-  if (!contentCheck.ok) { res.status(400).json({ error: contentCheck.error }); return; }
-  try {
-    await storeWritePromptExtension(name, content);
-    res.json({ ok: true, path: `data/bootstrap/prompt-extensions/${name}.md` });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: `Failed to write prompt extension: ${msg}` });
-  }
-});
-
-app.post('/api/svg/:drawId/bootstrap/reload', async (req: Request, res: Response) => {
-  const { reason } = req.body as { reason?: string };
-  const drawId = req.params.drawId as string;
-  const ok = await sessionManager.respawn(drawId, reason);
-  if (!ok) {
-    res.status(404).json({ error: 'No active session for this drawing' });
-    return;
-  }
-  res.json({ ok: true, reloaded_at: new Date().toISOString() });
-});
-
-app.post('/api/svg/:drawId/bootstrap/list', async (_req: Request, res: Response) => {
-  try {
-    const assets = await listAllAssets();
-    res.json(assets);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: `Failed to list assets: ${msg}` });
-  }
-});
-
-// --- Bootstrap: Custom Tool CRUD ---
-
-app.post('/api/svg/:drawId/bootstrap/write-custom-tool', async (req: Request, res: Response) => {
-  const { name, definition } = req.body as { name?: string; definition?: any };
-  if (!name || !definition) { res.status(400).json({ error: 'Missing name or definition' }); return; }
-  const nameCheck = validateName(name);
-  if (!nameCheck.ok) { res.status(400).json({ error: nameCheck.error }); return; }
-  const defCheck = validateCustomToolDefinition(definition);
-  if (!defCheck.ok) { res.status(400).json({ error: defCheck.error }); return; }
-  try {
-    await writeCustomTool(name, definition);
-    res.json({ ok: true, path: `data/bootstrap/custom-tools/${name}.json` });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: `Failed to write custom tool: ${msg}` });
-  }
-});
-
-// --- Bootstrap: Custom Route CRUD ---
-
-app.post('/api/svg/:drawId/bootstrap/write-custom-route', async (req: Request, res: Response) => {
-  const { name, definition } = req.body as { name?: string; definition?: any };
-  if (!name || !definition) { res.status(400).json({ error: 'Missing name or definition' }); return; }
-  const nameCheck = validateName(name);
-  if (!nameCheck.ok) { res.status(400).json({ error: nameCheck.error }); return; }
-  const defCheck = validateCustomRouteDefinition(definition);
-  if (!defCheck.ok) { res.status(400).json({ error: defCheck.error }); return; }
-  try {
-    await writeCustomRoute(name, definition);
-    res.json({ ok: true, path: `data/bootstrap/custom-routes/${name}.json` });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: `Failed to write custom route: ${msg}` });
-  }
-});
-
-// --- Bootstrap: Write Custom Macro ---
-
-app.post('/api/svg/:drawId/bootstrap/write-macro', async (req: Request, res: Response) => {
-  const { name, definition } = req.body as { name?: string; definition?: any };
-  if (!name || !definition) { res.status(400).json({ error: 'Missing name or definition' }); return; }
-  const nameCheck = validateName(name);
-  if (!nameCheck.ok) { res.status(400).json({ error: nameCheck.error }); return; }
-  const defCheck = validateMacroDefinition(name, definition);
-  if (!defCheck.ok) { res.status(400).json({ error: defCheck.error }); return; }
-  try {
-    await writeCustomMacro(name, definition);
-    res.json({ ok: true, path: `data/bootstrap/custom-macros/${name}.json` });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: `Failed to write macro: ${msg}` });
-  }
-});
-
-// --- Bootstrap: Rollback ---
-
-// Map short MCP type names to internal asset type names
-const ASSET_TYPE_MAP: Record<string, string> = {
-  'filter': 'custom-filter',
-  'style': 'custom-style',
-  'tool': 'custom-tool',
-  'route': 'custom-route',
-  'macro': 'custom-macro',
-  'prompt': 'prompt-extension',
-  'skill': 'skill',
-  // Also accept the full internal names directly
-  'custom-filter': 'custom-filter',
-  'custom-style': 'custom-style',
-  'custom-tool': 'custom-tool',
-  'custom-route': 'custom-route',
-  'custom-macro': 'custom-macro',
-  'prompt-extension': 'prompt-extension',
-};
-
-app.post('/api/svg/:drawId/bootstrap/rollback', async (req: Request, res: Response) => {
-  const { type: rawType, name, version } = req.body as { type?: string; name?: string; version?: number };
-  const type = rawType ? (ASSET_TYPE_MAP[rawType] || rawType) : rawType;
-  const check = validateRollback({ type, name, version });
-  if (!check.ok) { res.status(400).json({ error: check.error }); return; }
-  try {
-    const ok = await rollbackAsset(
-      type as 'custom-filter' | 'custom-style' | 'custom-tool' | 'custom-route' | 'custom-macro' | 'prompt-extension' | 'skill',
-      name!,
-      version!,
-    );
-    if (!ok) { res.status(404).json({ error: 'Version not found' }); return; }
-    res.json({ ok: true, rolled_back_to: version });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: `Rollback failed: ${msg}` });
-  }
-});
-
-// --- Bootstrap: History ---
-
-app.post('/api/svg/:drawId/bootstrap/history', async (req: Request, res: Response) => {
-  const { type: rawType, name } = req.body as { type?: string; name?: string };
-  const type = rawType ? (ASSET_TYPE_MAP[rawType] || rawType) : rawType;
-  if (!type || !name) { res.status(400).json({ error: 'Missing type or name' }); return; }
-  const nameCheck = validateName(name);
-  if (!nameCheck.ok) { res.status(400).json({ error: nameCheck.error }); return; }
-  try {
-    const history = await getAssetHistory(
-      type as 'custom-filter' | 'custom-style' | 'custom-tool' | 'custom-route' | 'custom-macro' | 'prompt-extension' | 'skill',
-      name,
-    );
-    res.json({ ok: true, versions: history });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: `Failed to get history: ${msg}` });
-  }
 });
 
 // --- Scratch Canvas Routes ──────────────────────────────────────────
@@ -964,96 +730,6 @@ app.post('/api/svg/:drawId/scratch/:canvasId/merge', async (req: Request, res: R
   res.json({ ok: true, layer_id: result.layerId, defs_transferred: result.defsTransferred });
 });
 
-// --- Custom Tool Execution ---
-
-app.post('/api/svg/:drawId/custom-tool/:toolName', async (req: Request, res: Response) => {
-  const handler = routeRegistry.getToolHandler(req.params.toolName as string);
-  if (handler) {
-    await handler(req, res);
-    return;
-  }
-  // Fallback: load from disk (handles newly-written tools before registry reload)
-  const tool = await loadCustomTool(req.params.toolName as string);
-  if (!tool) {
-    res.status(404).json({ error: `Custom tool not found: ${req.params.toolName}` });
-    return;
-  }
-  const drawId = req.params.drawId as string;
-  const ctx: PipelineContext = { drawId, vars: {}, prev: undefined, input: req.body as Record<string, unknown> };
-  try {
-    const result = await executePipeline(tool.handler.steps as any, ctx, pipelineDeps);
-    res.json({ ok: true, result });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
-  }
-});
-
-// --- Custom Route Execution ---
-
-app.post('/api/svg/:drawId/custom/:routeName', async (req: Request, res: Response) => {
-  const handler = routeRegistry.getRouteHandler(req.params.routeName as string);
-  if (handler) {
-    await handler(req, res);
-    return;
-  }
-  // Fallback: load from disk (handles newly-written routes before registry reload)
-  const route = await loadCustomRoute(req.params.routeName as string);
-  if (!route) {
-    res.status(404).json({ error: `Custom route not found: ${req.params.routeName}` });
-    return;
-  }
-  const drawId = req.params.drawId as string;
-  const ctx: PipelineContext = { drawId, vars: {}, prev: undefined, input: req.body as Record<string, unknown> };
-  try {
-    const result = await executePipeline(route.handler.steps as any, ctx, pipelineDeps);
-    res.json({ ok: true, result });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: msg });
-  }
-});
-
-// --- Bootstrap: Custom Tool Definition (for MCP server) ---
-
-app.post('/api/svg/:drawId/bootstrap/custom-tool-def/:toolName', async (req: Request, res: Response) => {
-  const toolName = req.params.toolName as string;
-  const tool = await loadCustomTool(toolName);
-  if (!tool) { res.status(404).json({ error: `Custom tool not found: ${toolName}` }); return; }
-  res.json(tool);
-});
-
-// --- Bootstrap: Macro Definition (for MCP server) ---
-
-app.post('/api/svg/:drawId/bootstrap/macro-def/:macroName', async (req: Request, res: Response) => {
-  const macroName = req.params.macroName as string;
-  const macro = await loadCustomMacro(macroName);
-  if (!macro) { res.status(404).json({ error: `Macro not found: ${macroName}` }); return; }
-  res.json(macro);
-});
-
-// --- Macro Execution ---
-
-app.post('/api/svg/:drawId/macro/:macroName', async (req: Request, res: Response) => {
-  const drawId = req.params.drawId as string;
-  const macroName = req.params.macroName as string;
-  const macro = await loadCustomMacro(macroName);
-  if (!macro) { res.status(404).json({ error: `Macro not found: ${macroName}` }); return; }
-  try {
-    const ctx: PipelineContext = {
-      drawId,
-      vars: {},
-      prev: undefined,
-      input: req.body as Record<string, unknown>,
-    };
-    const result = await executePipeline(macro.macro.steps as any, ctx, pipelineDeps);
-    res.json({ ok: true, result });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: `Macro execution failed: ${msg}` });
-  }
-});
-
 // --- SVG direct update endpoint (used by tests and internal tools) ---
 app.post('/api/svg/:drawId', async (req: Request, res: Response) => {
   const { svg } = req.body as { svg?: string };
@@ -1114,14 +790,6 @@ process.on('SIGINT', () => {
   sessionManager.destroyAll();
   scratchStore.destroy();
   process.exit(0);
-});
-
-// Load custom routes/tools/macros into registry
-await routeRegistry.reloadAll(pipelineDeps);
-
-// Wire up hot-reload: when a session respawns, refresh the global registry
-sessionManager.setOnReload(async () => {
-  await routeRegistry.reloadAll(pipelineDeps);
 });
 
 server.listen(PORT, () => {
